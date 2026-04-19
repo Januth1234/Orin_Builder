@@ -1,150 +1,118 @@
 import React, { useState } from 'react';
-import { Database, Key, Link2, ChevronDown, ChevronRight } from 'lucide-react';
+import { Database, Key, Link2, ChevronDown, ChevronRight, FileCode2 } from 'lucide-react';
 import { useBuilderStore } from '../../services/builderStore';
-import { DbTable, DbField } from '../../types';
 
 const TYPE_COLORS: Record<string, string> = {
-  UUID:      'text-amber-400',
-  VARCHAR:   'text-blue-400',
-  TEXT:      'text-blue-300',
-  INTEGER:   'text-green-400',
-  BOOLEAN:   'text-purple-400',
-  TIMESTAMP: 'text-rose-400',
-  JSONB:     'text-orange-400',
-  FLOAT:     'text-green-300',
-  ENUM:      'text-pink-400',
+  UUID:'text-amber-400',VARCHAR:'text-blue-400',TEXT:'text-blue-300',
+  INTEGER:'text-green-400',BOOLEAN:'text-purple-400',TIMESTAMP:'text-rose-400',
+  JSONB:'text-orange-400',FLOAT:'text-green-300',ENUM:'text-pink-400',
 };
 
 const DatabasePanel: React.FC = () => {
   const { currentProject } = useBuilderStore();
-  const schema = currentProject?.result?.dbSchema ?? [];
-  const [expanded, setExpanded] = useState<Set<string>>(new Set(schema.map(t => t.table)));
+  const bundle = currentProject?.bundle;
+  const bp = currentProject?.blueprint;
+  const tables = bp?.data_models ?? [];
+  const sql = bundle?.db_schema ?? '';
+  const [mode, setMode] = useState<'visual'|'sql'>('visual');
+  const [expanded, setExpanded] = useState<Set<string>>(new Set(tables.map(t => t.name)));
 
-  if (schema.length === 0) return (
+  if (!tables.length && !sql) return (
     <div className="flex h-full items-center justify-center text-b-dim text-sm">
       Database schema will appear after generation.
     </div>
   );
 
-  const toggle = (table: string) =>
-    setExpanded(s => { const n = new Set(s); n.has(table) ? n.delete(table) : n.add(table); return n; });
-
-  const allRelations = schema.flatMap(t => (t.relations ?? []).map(r => ({ table: t.table, rel: r })));
+  const toggle = (name: string) =>
+    setExpanded(s => { const n = new Set(s); n.has(name) ? n.delete(name) : n.add(name); return n; });
 
   return (
-    <div className="h-full overflow-y-auto custom-scrollbar p-4 flex flex-col gap-4">
-
-      {/* Summary bar */}
-      <div className="flex items-center gap-4 bg-b-surf border border-b-border rounded-xl px-4 py-3">
-        <Stat label="Tables"    value={schema.length} />
-        <div className="w-px h-8 bg-b-border" />
-        <Stat label="Fields"    value={schema.reduce((s, t) => s + t.fields.length, 0)} />
-        <div className="w-px h-8 bg-b-border" />
-        <Stat label="Relations" value={allRelations.length} />
+    <div className="flex flex-col h-full">
+      {/* Mode toggle */}
+      <div className="flex items-center gap-1 px-4 py-2.5 border-b border-b-border bg-b-surf flex-shrink-0">
+        {(['visual','sql'] as const).map(m => (
+          <button key={m} onClick={() => setMode(m)}
+            className={`px-3 py-1 rounded-lg text-[11px] font-medium transition-colors ${mode === m ? 'bg-b-elev text-white border border-b-border' : 'text-b-muted hover:text-white'}`}>
+            {m === 'visual' ? '⊞ Visual' : '{ } SQL'}
+          </button>
+        ))}
+        <div className="ml-auto flex items-center gap-3 text-[10px] text-b-dim">
+          <span>{tables.length} tables</span>
+          <span>{tables.reduce((s,t) => s + (t.fields?.length ?? 0), 0)} fields</span>
+        </div>
       </div>
 
-      {/* ER diagram text hint */}
-      <div className="flex items-start gap-2 bg-b-elev/50 border border-b-border rounded-lg px-3 py-2">
-        <Database size={13} className="text-b-muted mt-0.5 flex-shrink-0" />
-        <p className="text-[11px] text-b-muted leading-relaxed">
-          This schema is AI-generated for your site concept. Use it as a starting point for your actual database (PostgreSQL, Supabase, PlanetScale, etc.)
-        </p>
-      </div>
-
-      {/* Tables */}
-      {schema.map((table) => (
-        <TableCard
-          key={table.table}
-          table={table}
-          open={expanded.has(table.table)}
-          onToggle={() => toggle(table.table)}
-        />
-      ))}
-
-      {/* Relations */}
-      {allRelations.length > 0 && (
-        <div>
-          <p className="text-[11px] font-semibold uppercase tracking-widest text-b-dim mb-2">Relations</p>
-          <div className="flex flex-col gap-1.5">
-            {allRelations.map(({ rel }, i) => (
-              <div key={i} className="flex items-center gap-2 bg-b-surf border border-b-border rounded-lg px-3 py-2">
-                <Link2 size={11} className="text-b-muted flex-shrink-0" />
-                <span className="text-[12px] font-mono text-b-muted">{rel}</span>
+      <div className="flex-1 overflow-y-auto custom-scrollbar">
+        {mode === 'sql' ? (
+          <pre className="p-4 text-[11px] font-mono text-green-300/80 leading-relaxed whitespace-pre-wrap break-all">
+            {sql || '-- Schema will appear here after generation'}
+          </pre>
+        ) : (
+          <div className="p-4 flex flex-col gap-3">
+            {tables.length === 0 && sql && (
+              <div className="text-center py-8 text-b-dim text-sm">
+                <p>Switch to SQL view to see the raw schema.</p>
+              </div>
+            )}
+            {tables.map(t => (
+              <div key={t.name} className="bg-b-surf border border-b-border rounded-xl overflow-hidden">
+                <button onClick={() => toggle(t.name)}
+                  className="w-full flex items-center justify-between px-4 py-3 hover:bg-b-elev transition-colors">
+                  <div className="flex items-center gap-2.5">
+                    <Database size={13} className="text-b-blue" />
+                    <span className="text-[13px] font-semibold font-mono text-b-blue">{t.name}</span>
+                    <span className="text-[10px] bg-b-bg border border-b-border rounded px-1.5 py-0.5 text-b-dim">{t.fields?.length ?? 0} fields</span>
+                  </div>
+                  {expanded.has(t.name) ? <ChevronDown size={13} className="text-b-muted"/> : <ChevronRight size={13} className="text-b-muted"/>}
+                </button>
+                {expanded.has(t.name) && (
+                  <div className="border-t border-b-border">
+                    <div className="grid grid-cols-[1fr_90px_1fr] px-4 py-1.5 bg-b-bg/50">
+                      {['Field','Type','Note'].map(h=><span key={h} className="text-[9px] font-semibold uppercase tracking-widest text-b-dim">{h}</span>)}
+                    </div>
+                    {(t.fields ?? []).map((f,i)=>(
+                      <div key={i} className={`grid grid-cols-[1fr_90px_1fr] px-4 py-2 items-center ${i < (t.fields?.length??0)-1 ? 'border-b border-b-border/40' : ''} hover:bg-b-elev/20`}>
+                        <div className="flex items-center gap-1.5">
+                          {(f.note?.toLowerCase().includes('primary')||f.note?.toLowerCase().includes('pk')) && <Key size={10} className="text-amber-400 flex-shrink-0"/>}
+                          <span className="text-[12px] font-mono text-white truncate">{f.name}</span>
+                          {f.nullable===false && <span className="text-[9px] text-red-400/60 flex-shrink-0">NN</span>}
+                        </div>
+                        <span className={`text-[11px] font-mono font-semibold ${TYPE_COLORS[f.type]??'text-b-muted'}`}>{f.type}</span>
+                        <span className="text-[11px] text-b-dim truncate">{f.note}</span>
+                      </div>
+                    ))}
+                    {(t.relations?.length ?? 0) > 0 && (
+                      <div className="px-4 py-2 border-t border-b-border/40">
+                        {t.relations!.map((r,i)=>(
+                          <div key={i} className="flex items-center gap-1.5">
+                            <Link2 size={10} className="text-b-muted flex-shrink-0"/>
+                            <span className="text-[10px] font-mono text-b-muted">{r}</span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
             ))}
+
+            {/* API contracts */}
+            {(bundle?.api_contracts?.length ?? 0) > 0 && (
+              <div>
+                <p className="text-[10px] font-semibold uppercase tracking-widest text-b-dim mb-2 mt-2">API Contracts</p>
+                {bundle!.api_contracts.map((c,i)=>(
+                  <div key={i} className="flex items-center gap-2 bg-b-surf border border-b-border rounded-lg px-3 py-2 mb-1.5">
+                    <FileCode2 size={11} className="text-b-muted flex-shrink-0"/>
+                    <span className="text-[11px] font-mono text-b-muted">{c}</span>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
-        </div>
-      )}
-    </div>
-  );
-};
-
-const TableCard: React.FC<{ table: DbTable; open: boolean; onToggle: () => void }> = ({ table, open, onToggle }) => (
-  <div className="bg-b-surf border border-b-border rounded-xl overflow-hidden">
-    {/* Table header */}
-    <button
-      onClick={onToggle}
-      className="w-full flex items-center justify-between px-4 py-3 hover:bg-b-elev transition-colors"
-    >
-      <div className="flex items-center gap-2.5">
-        <Database size={13} className="text-b-blue" />
-        <span className="text-[13px] font-semibold font-mono text-b-blue">{table.table}</span>
-        <span className="text-[10px] bg-b-bg border border-b-border rounded px-1.5 py-0.5 text-b-dim">
-          {table.fields.length} fields
-        </span>
-      </div>
-      <div className="flex items-center gap-2">
-        <span className="text-[11px] text-b-dim hidden sm:block">{table.purpose}</span>
-        {open ? <ChevronDown size={13} className="text-b-muted" /> : <ChevronRight size={13} className="text-b-muted" />}
-      </div>
-    </button>
-
-    {/* Fields */}
-    {open && (
-      <div className="border-t border-b-border">
-        {/* Header row */}
-        <div className="grid grid-cols-[1fr_100px_1fr] gap-x-3 px-4 py-1.5 bg-b-bg/50">
-          {['Field', 'Type', 'Note'].map(h => (
-            <span key={h} className="text-[9px] font-semibold uppercase tracking-widest text-b-dim">{h}</span>
-          ))}
-        </div>
-        {/* Field rows */}
-        {table.fields.map((f, i) => (
-          <FieldRow key={i} field={f} last={i === table.fields.length - 1} />
-        ))}
-        {/* Purpose footer */}
-        <div className="px-4 py-2 bg-b-bg/30 border-t border-b-border">
-          <p className="text-[11px] text-b-dim">{table.purpose}</p>
-        </div>
-      </div>
-    )}
-  </div>
-);
-
-const FieldRow: React.FC<{ field: DbField; last: boolean }> = ({ field, last }) => {
-  const isPk = field.note?.toLowerCase().includes('primary') || field.note?.toLowerCase().includes('pk');
-  return (
-    <div className={`grid grid-cols-[1fr_100px_1fr] gap-x-3 px-4 py-2 items-center ${!last ? 'border-b border-b-border/50' : ''} hover:bg-b-elev/30 transition-colors`}>
-      <div className="flex items-center gap-1.5 min-w-0">
-        {isPk && <Key size={10} className="text-amber-400 flex-shrink-0" />}
-        <span className="text-[12px] font-mono text-white truncate">{field.name}</span>
-        {field.nullable === false && (
-          <span className="text-[9px] text-red-400/70 flex-shrink-0">NOT NULL</span>
         )}
       </div>
-      <span className={`text-[11px] font-mono font-semibold ${TYPE_COLORS[field.type] ?? 'text-b-muted'}`}>
-        {field.type}
-      </span>
-      <span className="text-[11px] text-b-dim truncate">{field.note}</span>
     </div>
   );
 };
-
-const Stat: React.FC<{ label: string; value: number }> = ({ label, value }) => (
-  <div className="flex flex-col items-center">
-    <span className="text-xl font-bold text-white">{value}</span>
-    <span className="text-[10px] text-b-muted">{label}</span>
-  </div>
-);
 
 export default DatabasePanel;
