@@ -8,26 +8,42 @@ const AuthGate: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [loginError, setLoginError] = React.useState<string | null>(null);
 
   useEffect(() => {
-    let unsub: (() => void) | null = null;
-    (async () => {
-      // Try cross-subdomain SSO first (?ot=<idToken> from main Orin AI app)
-      await firebaseService.attemptSSOFromUrl();
-      // Then subscribe to Firebase auth state (handles LOCAL persistence + SSO)
-      unsub = firebaseService.onAuthChanged(async (fbUser) => {
-        if (fbUser) {
-          const account = await firebaseService.upsertUser(fbUser).catch(() => ({
-            id: fbUser.uid, name: fbUser.displayName ?? 'User',
-            email: fbUser.email ?? '', avatar: fbUser.photoURL ?? undefined,
-            tier: 'Free' as const, dailyUsage: { text:0, images:0, videos:0 },
-          }));
-          setUser(account);
-        } else {
-          setUser(null);
-        }
-        setAuthLoading(false);
-      });
-    })();
-    return () => { unsub?.(); };
+    let resolved = false;
+    const clearLoading = () => {
+      if (resolved) return;
+      resolved = true;
+      setAuthLoading(false);
+    };
+
+    // Register auth listener first so startup never blocks on SSO exchange.
+    const unsub = firebaseService.onAuthChanged(async (fbUser) => {
+      if (fbUser) {
+        const account = await firebaseService.upsertUser(fbUser).catch(() => ({
+          id: fbUser.uid, name: fbUser.displayName ?? 'User',
+          email: fbUser.email ?? '', avatar: fbUser.photoURL ?? undefined,
+          tier: 'Free' as const, dailyUsage: { text:0, images:0, videos:0 },
+        }));
+        setUser(account);
+      } else {
+        setUser(null);
+      }
+      clearLoading();
+    });
+
+    const startupTimeout = window.setTimeout(() => {
+      clearLoading();
+      setLoginError('Session check timed out. Please sign in manually.');
+    }, 8000);
+
+    // Run SSO exchange in background. Listener above will react if sign-in succeeds.
+    firebaseService.attemptSSOFromUrl().catch(() => {
+      /* no-op; login screen remains available */
+    });
+
+    return () => {
+      window.clearTimeout(startupTimeout);
+      unsub?.();
+    };
   }, []);
 
   const handleLogin = async () => {

@@ -114,10 +114,17 @@ class FirebaseService {
     const params = new URLSearchParams(window.location.search);
     const token  = params.get(SSO_PARAM);
     if (!token) return false;
+    const ctrl = new AbortController();
+    const timeoutId = window.setTimeout(() => ctrl.abort(), 7000);
     try {
       const res = await fetch(
         'https://us-central1-orin-ai-f6798.cloudfunctions.net/issueCustomToken',
-        { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ idToken: token }) },
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ idToken: token }),
+          signal: ctrl.signal,
+        },
       );
       if (!res.ok) return false;
       const { customToken } = await res.json();
@@ -129,6 +136,8 @@ class FirebaseService {
     } catch (e) {
       console.warn('[firebase] SSO exchange failed:', e);
       return false;
+    } finally {
+      window.clearTimeout(timeoutId);
     }
   }
 
