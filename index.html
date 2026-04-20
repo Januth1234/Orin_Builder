@@ -57,17 +57,41 @@
   <script>
     (() => {
       const RETRY_KEY = 'orin_boot_retry_count';
-      const MAX_RETRIES = 1;
-      const BOOT_TIMEOUT_MS = 7000;
+      const MAX_RETRIES = 2;
+      const BOOT_TIMEOUT_MS = 25000;
 
       const shell = document.getElementById('boot-shell');
-      const reloadWithBypass = async () => {
+      const safeStorage = {
+        get(key) {
+          try { return sessionStorage.getItem(key); } catch (_) { return null; }
+        },
+        set(key, value) {
+          try { sessionStorage.setItem(key, value); } catch (_) {}
+        },
+        remove(key) {
+          try { sessionStorage.removeItem(key); } catch (_) {}
+        },
+      };
+
+      const clearClientCaches = async () => {
         try {
           if ('caches' in window) {
             const keys = await caches.keys();
             await Promise.all(keys.map((key) => caches.delete(key)));
           }
         } catch (_) {}
+      };
+
+      const unregisterServiceWorkers = async () => {
+        try {
+          if (!('serviceWorker' in navigator)) return;
+          const registrations = await navigator.serviceWorker.getRegistrations();
+          await Promise.all(registrations.map((registration) => registration.unregister()));
+        } catch (_) {}
+      };
+
+      const reloadWithBypass = async () => {
+        await Promise.all([clearClientCaches(), unregisterServiceWorkers()]);
 
         const url = new URL(window.location.href);
         url.searchParams.set('boot_retry', String(Date.now()));
@@ -86,25 +110,28 @@
           </div>`;
         const btn = document.getElementById('boot-retry-btn');
         btn?.addEventListener('click', () => {
-          sessionStorage.removeItem(RETRY_KEY);
+          safeStorage.remove(RETRY_KEY);
           void reloadWithBypass();
         });
       };
 
+      // Warm cleanup in background to avoid stale SW/cache traps.
+      void unregisterServiceWorkers();
+
       window.setTimeout(() => {
         if (window.__orinBooted) {
-          sessionStorage.removeItem(RETRY_KEY);
+          safeStorage.remove(RETRY_KEY);
           return;
         }
 
-        const retries = Number(sessionStorage.getItem(RETRY_KEY) || '0');
+        const retries = Number(safeStorage.get(RETRY_KEY) || '0');
         if (retries < MAX_RETRIES) {
-          sessionStorage.setItem(RETRY_KEY, String(retries + 1));
+          safeStorage.set(RETRY_KEY, String(retries + 1));
           void reloadWithBypass();
           return;
         }
 
-        sessionStorage.removeItem(RETRY_KEY);
+        safeStorage.remove(RETRY_KEY);
         renderBootError(window.__orinBootError || 'Startup timed out while loading app bundles.');
       }, BOOT_TIMEOUT_MS);
     })();
