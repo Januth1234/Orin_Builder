@@ -42,7 +42,7 @@
 <body>
   <div id="root">
     <!-- First-paint shell -->
-    <div style="display:flex;height:100vh;width:100vw;align-items:center;justify-content:center;flex-direction:column;gap:16px;background:#0c0d11;">
+    <div id="boot-shell" style="display:flex;height:100vh;width:100vw;align-items:center;justify-content:center;flex-direction:column;gap:16px;background:#0c0d11;">
       <svg width="40" height="40" viewBox="0 0 40 40" fill="none">
         <rect width="40" height="40" rx="10" fill="#22c892" opacity="0.15"/>
         <path d="M12 20h16M20 12v16" stroke="#22c892" stroke-width="2.5" stroke-linecap="round"/>
@@ -54,6 +54,61 @@
     </div>
   </div>
   <style>@keyframes spin{to{transform:rotate(360deg)}}</style>
+  <script>
+    (() => {
+      const RETRY_KEY = 'orin_boot_retry_count';
+      const MAX_RETRIES = 1;
+      const BOOT_TIMEOUT_MS = 7000;
+
+      const shell = document.getElementById('boot-shell');
+      const reloadWithBypass = async () => {
+        try {
+          if ('caches' in window) {
+            const keys = await caches.keys();
+            await Promise.all(keys.map((key) => caches.delete(key)));
+          }
+        } catch (_) {}
+
+        const url = new URL(window.location.href);
+        url.searchParams.set('boot_retry', String(Date.now()));
+        window.location.replace(url.toString());
+      };
+
+      const renderBootError = (message) => {
+        if (!shell) return;
+        shell.innerHTML = `
+          <div style="max-width:460px;border:1px solid #1f2130;background:#13141b;border-radius:14px;padding:18px 16px;text-align:center;font-family:'Plus Jakarta Sans',sans-serif;">
+            <p style="margin:0 0 8px 0;color:#f1f2f6;font-size:14px;font-weight:600;">Builder failed to start</p>
+            <p style="margin:0;color:#686b7e;font-size:12px;line-height:1.45;">${message}</p>
+            <button id="boot-retry-btn" style="margin-top:12px;border:1px solid #1f2130;background:#1a1b24;color:#f1f2f6;border-radius:8px;padding:7px 10px;font-size:12px;cursor:pointer;">
+              Retry startup
+            </button>
+          </div>`;
+        const btn = document.getElementById('boot-retry-btn');
+        btn?.addEventListener('click', () => {
+          sessionStorage.removeItem(RETRY_KEY);
+          void reloadWithBypass();
+        });
+      };
+
+      window.setTimeout(() => {
+        if (window.__orinBooted) {
+          sessionStorage.removeItem(RETRY_KEY);
+          return;
+        }
+
+        const retries = Number(sessionStorage.getItem(RETRY_KEY) || '0');
+        if (retries < MAX_RETRIES) {
+          sessionStorage.setItem(RETRY_KEY, String(retries + 1));
+          void reloadWithBypass();
+          return;
+        }
+
+        sessionStorage.removeItem(RETRY_KEY);
+        renderBootError(window.__orinBootError || 'Startup timed out while loading app bundles.');
+      }, BOOT_TIMEOUT_MS);
+    })();
+  </script>
   <script type="module" src="/index.tsx"></script>
 </body>
 </html>
