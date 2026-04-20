@@ -144,23 +144,23 @@ const BuilderSidebar: React.FC = () => {
           )}
 
           {/* Artifact files */}
-          {bundle?.files?.length > 0 && (
+          {(bundle?.files?.length ?? 0) > 0 && (
             <>
               <div className="h-px bg-b-border mx-3 my-1" />
               <div className="px-3 py-2">
                 <p className="text-[9px] font-semibold uppercase tracking-widest text-b-dim mb-1.5">Artifacts</p>
-                {bundle.files.map((f, i) => (
+                {bundle?.files?.map((f, i) => (
                   <div key={i} className="flex items-center gap-1.5 py-0.5">
                     <div className="w-1.5 h-1.5 rounded-full bg-b-accent/60 flex-shrink-0" />
                     <span className="text-[11px] font-mono text-b-muted truncate">{f.path}</span>
                     <span className="text-[9px] text-b-dim ml-auto flex-shrink-0">
-                      {(f.content.length / 1024).toFixed(0)}KB
+                      {((f.sizeBytes ?? f.content?.length ?? 0) / 1024).toFixed(0)}KB
                     </span>
                   </div>
                 ))}
-                {bundle.validation_warnings?.length > 0 && (
+                {(bundle?.validation?.warnings?.length ?? 0) > 0 && (
                   <div className="mt-1.5 text-[10px] text-amber-400/80">
-                    ⚠ {bundle.validation_warnings.length} warning{bundle.validation_warnings.length > 1 ? 's' : ''}
+                    ⚠ {bundle?.validation?.warnings?.length} warning{(bundle?.validation?.warnings?.length ?? 0) > 1 ? 's' : ''}
                   </div>
                 )}
               </div>

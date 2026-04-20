@@ -147,9 +147,9 @@ const BuilderApp: React.FC = () => {
                 <Icon size={12}/>{label}
               </button>
             ))}
-            {currentProject?.bundle?.validation_warnings?.length > 0 && (
+            {(currentProject?.bundle?.validation?.warnings?.length ?? 0) > 0 && (
               <span className="ml-auto mr-3 text-[10px] text-amber-400 flex items-center gap-1">
-                ⚠ {currentProject.bundle.validation_warnings.length} warning{currentProject.bundle.validation_warnings.length > 1 ? 's' : ''}
+                ⚠ {currentProject?.bundle?.validation?.warnings.length} warning{(currentProject?.bundle?.validation?.warnings?.length ?? 0) > 1 ? 's' : ''}
               </span>
             )}
           </div>

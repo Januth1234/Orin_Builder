@@ -209,6 +209,8 @@ export interface ArtifactBundle {
   api_contracts: string[];
   status: 'assembling'|'complete'|'invalid'|'partial';
   validation?: ValidationResult;
+  validation_warnings?: string[];   // convenience flat array from validation.warnings
+  validation_errors?: string[];     // convenience flat array from validation.errors
   assembled_at?: string;
 }
 

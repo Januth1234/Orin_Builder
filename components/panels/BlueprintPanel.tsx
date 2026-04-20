@@ -1,5 +1,5 @@
 import React from 'react';
-import { Layout, Globe, Palette, Users, Tag, Layers, AlertTriangle, CheckCircle2, Shield } from 'lucide-react';
+import { Layout, Globe, Palette, Users, Tag as TagIcon, Layers, AlertTriangle, CheckCircle2 } from 'lucide-react';
 import { useBuilderStore } from '../../services/builderStore';
 
 const BlueprintPanel: React.FC = () => {
@@ -39,7 +39,7 @@ const BlueprintPanel: React.FC = () => {
       <div className="grid grid-cols-2 gap-3">
         <Card icon={<Layout size={13}/>} title="Pages">
           <div className="flex flex-wrap gap-1 mt-1.5">
-            {bp.pages?.map((p,i)=><Tag key={i} name={p} />)}
+            {bp.pages?.map((p,i)=><TagChip key={i} name={p} />)}
           </div>
         </Card>
         <Card icon={<Layers size={13}/>} title="Tech Stack">
@@ -103,10 +103,10 @@ const BlueprintPanel: React.FC = () => {
       )}
 
       {/* Validation */}
-      {bundle?.validation_warnings?.length > 0 && (
+      {(bundle?.validation?.warnings?.length ?? 0) > 0 && (
         <div className="bg-amber-950/20 border border-amber-800/30 rounded-xl px-3 py-2">
           <p className="text-[10px] font-semibold uppercase tracking-widest text-amber-400 mb-1">Validation Warnings</p>
-          {bundle.validation_warnings.map((w,i)=>(
+          {bundle?.validation?.warnings?.map((w: string, i: number)=>(
             <p key={i} className="text-[11px] text-amber-300/80">{w}</p>
           ))}
         </div>
@@ -125,7 +125,7 @@ const BlueprintPanel: React.FC = () => {
           <div className="flex flex-wrap gap-1.5">
             {bp.seoKeywords.map((k,i)=>(
               <span key={i} className="flex items-center gap-1 text-[11px] bg-b-elev border border-b-border text-b-muted rounded-full px-2.5 py-0.5">
-                <Tag size={9}/>{k}
+                <TagIcon size={9}/>{k}
               </span>
             ))}
           </div>
@@ -135,7 +135,7 @@ const BlueprintPanel: React.FC = () => {
   );
 };
 
-const Tag: React.FC<{name:string}> = ({name}) => (
+const TagChip: React.FC<{name:string}> = ({name}) => (
   <span className="text-[11px] bg-b-bg border border-b-border text-b-muted rounded-md px-2 py-0.5">{name}</span>
 );
 const Card: React.FC<{icon:React.ReactNode;title:string;children:React.ReactNode}> = ({icon,title,children}) => (

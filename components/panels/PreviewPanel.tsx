@@ -22,7 +22,7 @@ const PreviewPanel: React.FC = () => {
 
   const html = currentProject?.bundle?.files.find(f => f.path === 'index.html')?.content ?? '';
   const isBuilding = !['queued','complete','failed'].includes(state);
-  const warnings = currentProject?.bundle?.validation_warnings ?? [];
+  const warnings = currentProject?.bundle?.validation?.warnings ?? [];
 
   const exportHtml = () => {
     const blob = new Blob([html], { type: 'text/html' });

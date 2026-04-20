@@ -107,36 +107,65 @@ async function parseJSONWithRetry<T>(
 }
 
 // ── Gemini function declarations ───────────────────────────────────────────────
-const TOOL_DECLARATIONS = [
-  { name: 'analyze_prompt',
+// Each declaration is a plain object matching FunctionDeclaration — no undefined values
+const TOOL_DECLARATIONS: any[] = [
+  {
+    name: 'analyze_prompt',
     description: 'Extract intent, constraints, pages, features, and ambiguities from the user prompt.',
-    parameters: { type: Type.OBJECT, properties: { prompt: { type: Type.STRING } }, required: ['prompt'] } },
-  { name: 'create_blueprint',
+    parameters: { type: Type.OBJECT, properties: { prompt: { type: Type.STRING } }, required: ['prompt'] },
+  },
+  {
+    name: 'create_blueprint',
     description: 'Transform prompt analysis into a complete website blueprint. Always called after analyze_prompt.',
-    parameters: { type: Type.OBJECT,
-      properties: { intent: { type: Type.STRING }, constraints: { type: Type.ARRAY, items: { type: Type.STRING } },
-        pages: { type: Type.ARRAY, items: { type: Type.STRING } }, features: { type: Type.ARRAY, items: { type: Type.STRING } } },
-      required: ['intent', 'pages', 'features'] } },
-  { name: 'request_clarification',
+    parameters: {
+      type: Type.OBJECT,
+      properties: {
+        intent:      { type: Type.STRING },
+        constraints: { type: Type.ARRAY, items: { type: Type.STRING } },
+        pages:       { type: Type.ARRAY, items: { type: Type.STRING } },
+        features:    { type: Type.ARRAY, items: { type: Type.STRING } },
+      },
+      required: ['intent', 'pages', 'features'],
+    },
+  },
+  {
+    name: 'request_clarification',
     description: 'Ask user for missing info. Call ONLY when critical details are absent.',
-    parameters: { type: Type.OBJECT, properties: { questions: { type: Type.ARRAY, items: { type: Type.STRING } } }, required: ['questions'] } },
-  { name: 'generate_backend_plan',
+    parameters: { type: Type.OBJECT, properties: { questions: { type: Type.ARRAY, items: { type: Type.STRING } } }, required: ['questions'] },
+  },
+  {
+    name: 'generate_backend_plan',
     description: 'Create backend architecture: API routes, auth, middleware, env vars. Always before frontend.',
-    parameters: { type: Type.OBJECT, properties: { blueprint: { type: Type.OBJECT } }, required: ['blueprint'] } },
-  { name: 'generate_database_plan',
+    parameters: { type: Type.OBJECT, properties: { blueprint: { type: Type.OBJECT } }, required: ['blueprint'] },
+  },
+  {
+    name: 'generate_database_plan',
     description: 'Generate PostgreSQL schema, SQL DDL, and data relationships.',
-    parameters: { type: Type.OBJECT, properties: { blueprint: { type: Type.OBJECT } }, required: ['blueprint'] } },
-  { name: 'generate_frontend_plan',
+    parameters: { type: Type.OBJECT, properties: { blueprint: { type: Type.OBJECT } }, required: ['blueprint'] },
+  },
+  {
+    name: 'generate_frontend_plan',
     description: 'Create UI component specs, layout strategy, and animation plan. After backend.',
-    parameters: { type: Type.OBJECT, properties: { blueprint: { type: Type.OBJECT } }, required: ['blueprint'] } },
-  { name: 'assemble_artifacts',
-    description: 'Combine all plans into complete HTML/CSS/JS + SQL + API docs. Requires backend, frontend, and database plans.',
-    parameters: { type: Type.OBJECT,
-      properties: { backend_plan: { type: Type.OBJECT }, frontend_plan: { type: Type.OBJECT }, database_plan: { type: Type.OBJECT } },
-      required: ['backend_plan', 'frontend_plan', 'database_plan'] } },
-  { name: 'validate_bundle',
+    parameters: { type: Type.OBJECT, properties: { blueprint: { type: Type.OBJECT } }, required: ['blueprint'] },
+  },
+  {
+    name: 'assemble_artifacts',
+    description: 'Combine all plans into complete HTML/CSS/JS + SQL + API docs.',
+    parameters: {
+      type: Type.OBJECT,
+      properties: {
+        backend_plan:  { type: Type.OBJECT },
+        frontend_plan: { type: Type.OBJECT },
+        database_plan: { type: Type.OBJECT },
+      },
+      required: ['backend_plan', 'frontend_plan', 'database_plan'],
+    },
+  },
+  {
+    name: 'validate_bundle',
     description: 'Check artifact bundle for errors, missing elements, and schema mismatches. Always last.',
-    parameters: { type: Type.OBJECT, properties: { files: { type: Type.ARRAY, items: { type: Type.OBJECT } } }, required: ['files'] } },
+    parameters: { type: Type.OBJECT, properties: { files: { type: Type.ARRAY, items: { type: Type.OBJECT } } }, required: ['files'] },
+  },
 ];
 
 // ── Tool implementations ──────────────────────────────────────────────────────
@@ -464,7 +493,7 @@ function buildApiMarkdown(bp?: SiteBlueprint, plan?: BackendPlan): string {
 }
 
 // ── State/tool mapping ────────────────────────────────────────────────────────
-const TOOL_TO_STATE: Record<ToolName, BuildState> = {
+const TOOL_TO_STATE: Record<string, BuildState> = {
   analyze_prompt:         'analyzing',
   create_blueprint:       'planning',
   request_clarification:  'clarification_needed',
@@ -562,6 +591,7 @@ export class Orchestrator {
     const { signal } = this;
     let analysis: any, blueprint: any, backendPlan: any, databasePlan: any, frontendPlan: any;
     let bundle: ArtifactBundle | undefined;
+    let clarifications: { answers: Record<string, string> } | undefined;
 
     this.emit('state_changed', 'queued', { message: 'Build queued', progress: 0 });
 
@@ -596,7 +626,7 @@ ${existingClarifications ? `ANSWERS ALREADY PROVIDED: ${JSON.stringify(existingC
         });
       } catch (e: any) {
         this.transition('failed', state, { message: `Gemini API error: ${e.message}` });
-        return { blueprint, bundle, state: 'failed' as BuildState, error: e.message };
+        return { blueprint, bundle, state: 'failed' as BuildState, error: e.message, clarifications: undefined };
       }
 
       if (response.candidates?.[0]?.content?.parts)
@@ -611,7 +641,7 @@ ${existingClarifications ? `ANSWERS ALREADY PROVIDED: ${JSON.stringify(existingC
         if (signal.aborted) break;
         const toolName = fc.name as ToolName;
         const args = injectContext(toolName, fc.args ?? {}, { analysis, blueprint, backendPlan, databasePlan, frontendPlan });
-        const newState = TOOL_TO_STATE[toolName] ?? state;
+        const newState: BuildState = TOOL_TO_STATE[toolName] ?? state;
 
         if (newState !== state) { this.transition(newState, state, { tool_name: toolName, tool_call_id: fc.id }); state = newState; }
         this.emit('tool_call_started', state, { tool_name: toolName, tool_call_id: fc.id });
@@ -627,8 +657,9 @@ ${existingClarifications ? `ANSWERS ALREADY PROVIDED: ${JSON.stringify(existingC
             ]).catch(() => null);
             if (!answers) {
               this.transition('failed', state, { message: 'Clarification timed out' });
-              return { blueprint, bundle, state: 'failed' as BuildState, error: 'Clarification not provided' };
+              return { blueprint, bundle, state: 'failed' as BuildState, error: 'Clarification not provided', clarifications: undefined };
             }
+            clarifications = { answers };
             responses.push(makeFnResponse(toolName, fc.id, { answers }));
             continue;
           }
@@ -657,7 +688,7 @@ ${existingClarifications ? `ANSWERS ALREADY PROVIDED: ${JSON.stringify(existingC
         if (lastErr) {
           if (FATAL_TOOLS.has(toolName)) {
             this.transition('failed', state, { message: lastErr.message });
-            return { blueprint, bundle, state: 'failed' as BuildState, error: lastErr.message };
+            return { blueprint, bundle, state: 'failed' as BuildState, error: lastErr.message, clarifications: undefined };
           }
           this.emit('validation_warning', state, { message: `${toolName} failed (non-fatal): ${lastErr.message}` });
           responses.push(makeFnResponse(toolName, fc.id, { error: lastErr.message }));
@@ -676,7 +707,13 @@ ${existingClarifications ? `ANSWERS ALREADY PROVIDED: ${JSON.stringify(existingC
         }
         if (toolName === 'validate_bundle' && bundle) {
           const v = result as ValidationResult;
-          bundle = { ...bundle, status: v.valid ? 'complete' : 'partial', validation: v };
+          bundle = {
+            ...bundle,
+            status: v.valid ? 'complete' : 'partial',
+            validation: v,
+            validation_warnings: v.warnings,
+            validation_errors: v.errors,
+          };
           v.warnings.forEach(w => this.emit('validation_warning', state, { message: w }));
           v.errors.forEach(e   => this.emit('validation_error',   state, { message: e }));
         }
@@ -700,7 +737,7 @@ ${existingClarifications ? `ANSWERS ALREADY PROVIDED: ${JSON.stringify(existingC
     }
 
     if (signal.aborted)
-      return { blueprint, bundle, state: 'failed' as BuildState, error: 'Aborted' };
+      return { blueprint, bundle, state: 'failed' as BuildState, error: 'Aborted', clarifications: undefined };
 
     const final: BuildState = bundle ? 'complete' : 'failed';
     this.transition(final, state, { progress: 100, artifact_path: 'index.html',
@@ -709,7 +746,11 @@ ${existingClarifications ? `ANSWERS ALREADY PROVIDED: ${JSON.stringify(existingC
 
     return {
       analysis, blueprint, backendPlan, databasePlan, frontendPlan,
-      bundle: bundle ? { ...bundle, status: bundle.status === 'assembling' ? 'complete' : bundle.status } : undefined,
+      clarifications,
+      bundle: bundle ? {
+        ...bundle,
+        status: bundle.status === 'assembling' ? 'complete' : bundle.status,
+      } : undefined,
       state: final,
       title: (blueprint as SiteBlueprint | undefined)?.siteName ?? 'Untitled',
     };
