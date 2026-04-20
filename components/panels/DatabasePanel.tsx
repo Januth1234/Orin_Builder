@@ -1,109 +1,176 @@
-import React, { useState } from 'react';
-import { Database, Key, Link2, ChevronDown, ChevronRight, FileCode2 } from 'lucide-react';
+﻿import React, { useMemo, useState } from 'react';
+import { ChevronDown, ChevronRight, Database, FileCode2, Key, Link2 } from 'lucide-react';
 import { useBuilderStore } from '../../services/builderStore';
 
 const TYPE_COLORS: Record<string, string> = {
-  UUID:'text-amber-400',VARCHAR:'text-blue-400',TEXT:'text-blue-300',
-  INTEGER:'text-green-400',BOOLEAN:'text-purple-400',TIMESTAMP:'text-rose-400',
-  JSONB:'text-orange-400',FLOAT:'text-green-300',ENUM:'text-pink-400',
+  UUID: 'text-amber-400',
+  VARCHAR: 'text-blue-400',
+  TEXT: 'text-blue-300',
+  INTEGER: 'text-green-400',
+  BOOLEAN: 'text-purple-400',
+  TIMESTAMP: 'text-rose-400',
+  JSONB: 'text-orange-400',
+  FLOAT: 'text-green-300',
+  ENUM: 'text-pink-400',
+  BIGINT: 'text-green-400',
+  DECIMAL: 'text-emerald-300',
 };
 
 const DatabasePanel: React.FC = () => {
   const { currentProject } = useBuilderStore();
   const bundle = currentProject?.bundle;
-  const bp = currentProject?.blueprint;
-  const tables = bp?.data_models ?? [];
+  const blueprint = currentProject?.blueprint;
+
+  const tables = blueprint?.data_models ?? [];
   const sql = bundle?.db_schema ?? '';
-  const [mode, setMode] = useState<'visual'|'sql'>('visual');
-  const [expanded, setExpanded] = useState<Set<string>>(new Set(tables.map(t => t.name)));
+  const metadataOnly = Boolean(tables.length) && !sql.trim();
 
-  if (!tables.length && !sql) return (
-    <div className="flex h-full items-center justify-center text-b-dim text-sm">
-      Database schema will appear after generation.
-    </div>
-  );
+  const [mode, setMode] = useState<'visual' | 'sql'>('visual');
+  const [expanded, setExpanded] = useState<Set<string>>(new Set(tables.map((table) => table.name)));
 
-  const toggle = (name: string) =>
-    setExpanded(s => { const n = new Set(s); n.has(name) ? n.delete(name) : n.add(name); return n; });
+  const fieldCount = useMemo(() => tables.reduce((count, table) => count + (table.fields?.length ?? 0), 0), [tables]);
+
+  if (!tables.length && !sql.trim()) {
+    return (
+      <div className="flex h-full items-center justify-center text-sm text-b-dim">
+        Database schema will appear after generation.
+      </div>
+    );
+  }
+
+  const toggle = (name: string) => {
+    setExpanded((current) => {
+      const next = new Set(current);
+      if (next.has(name)) next.delete(name);
+      else next.add(name);
+      return next;
+    });
+  };
 
   return (
-    <div className="flex flex-col h-full">
-      {/* Mode toggle */}
-      <div className="flex items-center gap-1 px-4 py-2.5 border-b border-b-border bg-b-surf flex-shrink-0">
-        {(['visual','sql'] as const).map(m => (
-          <button key={m} onClick={() => setMode(m)}
-            className={`px-3 py-1 rounded-lg text-[11px] font-medium transition-colors ${mode === m ? 'bg-b-elev text-white border border-b-border' : 'text-b-muted hover:text-white'}`}>
-            {m === 'visual' ? '⊞ Visual' : '{ } SQL'}
+    <div className="flex h-full flex-col">
+      <div className="flex flex-wrap items-center gap-1 border-b border-b-border bg-b-surf px-4 py-2.5">
+        {(['visual', 'sql'] as const).map((item) => (
+          <button
+            key={item}
+            onClick={() => setMode(item)}
+            className={`rounded-lg px-3 py-1 text-[11px] font-medium transition-colors ${
+              mode === item ? 'border border-b-border bg-b-elev text-white' : 'text-b-muted hover:text-white'
+            }`}
+          >
+            {item === 'visual' ? 'Visual' : 'SQL'}
           </button>
         ))}
+
         <div className="ml-auto flex items-center gap-3 text-[10px] text-b-dim">
           <span>{tables.length} tables</span>
-          <span>{tables.reduce((s,t) => s + (t.fields?.length ?? 0), 0)} fields</span>
+          <span>{fieldCount} fields</span>
         </div>
       </div>
 
-      <div className="flex-1 overflow-y-auto custom-scrollbar">
+      {metadataOnly && (
+        <div className="border-b border-amber-800/40 bg-amber-950/20 px-4 py-2 text-[11px] text-amber-200">
+          SQL output is unavailable for this saved project snapshot. Rebuild to regenerate full schema text.
+        </div>
+      )}
+
+      <div className="custom-scrollbar flex-1 overflow-y-auto">
         {mode === 'sql' ? (
-          <pre className="p-4 text-[11px] font-mono text-green-300/80 leading-relaxed whitespace-pre-wrap break-all">
-            {sql || '-- Schema will appear here after generation'}
+          <pre className="whitespace-pre-wrap break-all p-4 font-mono text-[11px] leading-relaxed text-green-300/85">
+            {sql || '-- SQL schema not available for this snapshot.'}
           </pre>
         ) : (
-          <div className="p-4 flex flex-col gap-3">
-            {tables.length === 0 && sql && (
-              <div className="text-center py-8 text-b-dim text-sm">
-                <p>Switch to SQL view to see the raw schema.</p>
+          <div className="flex flex-col gap-3 p-4">
+            {tables.length === 0 && (
+              <div className="rounded-xl border border-b-border bg-b-surf/70 px-4 py-6 text-center text-sm text-b-dim">
+                No structured table definitions found. Switch to SQL view for raw schema output.
               </div>
             )}
-            {tables.map(t => (
-              <div key={t.name} className="bg-b-surf border border-b-border rounded-xl overflow-hidden">
-                <button onClick={() => toggle(t.name)}
-                  className="w-full flex items-center justify-between px-4 py-3 hover:bg-b-elev transition-colors">
-                  <div className="flex items-center gap-2.5">
-                    <Database size={13} className="text-b-blue" />
-                    <span className="text-[13px] font-semibold font-mono text-b-blue">{t.name}</span>
-                    <span className="text-[10px] bg-b-bg border border-b-border rounded px-1.5 py-0.5 text-b-dim">{t.fields?.length ?? 0} fields</span>
-                  </div>
-                  {expanded.has(t.name) ? <ChevronDown size={13} className="text-b-muted"/> : <ChevronRight size={13} className="text-b-muted"/>}
-                </button>
-                {expanded.has(t.name) && (
-                  <div className="border-t border-b-border">
-                    <div className="grid grid-cols-[1fr_90px_1fr] px-4 py-1.5 bg-b-bg/50">
-                      {['Field','Type','Note'].map(h=><span key={h} className="text-[9px] font-semibold uppercase tracking-widest text-b-dim">{h}</span>)}
+
+            {tables.map((table) => {
+              const fields = table.fields ?? [];
+              const relations = table.relations ?? [];
+              const open = expanded.has(table.name);
+
+              return (
+                <div key={table.name} className="overflow-hidden rounded-xl border border-b-border bg-b-surf">
+                  <button
+                    onClick={() => toggle(table.name)}
+                    className="flex w-full items-center justify-between px-4 py-3 transition-colors hover:bg-b-elev"
+                  >
+                    <div className="flex items-center gap-2.5">
+                      <Database size={13} className="text-b-blue" />
+                      <span className="font-mono text-[13px] font-semibold text-b-blue">{table.name}</span>
+                      <span className="rounded border border-b-border bg-b-bg px-1.5 py-0.5 text-[10px] text-b-dim">
+                        {fields.length} fields
+                      </span>
                     </div>
-                    {(t.fields ?? []).map((f,i)=>(
-                      <div key={i} className={`grid grid-cols-[1fr_90px_1fr] px-4 py-2 items-center ${i < (t.fields?.length??0)-1 ? 'border-b border-b-border/40' : ''} hover:bg-b-elev/20`}>
-                        <div className="flex items-center gap-1.5">
-                          {(f.note?.toLowerCase().includes('primary')||f.note?.toLowerCase().includes('pk')) && <Key size={10} className="text-amber-400 flex-shrink-0"/>}
-                          <span className="text-[12px] font-mono text-white truncate">{f.name}</span>
-                          {f.nullable===false && <span className="text-[9px] text-red-400/60 flex-shrink-0">NN</span>}
-                        </div>
-                        <span className={`text-[11px] font-mono font-semibold ${TYPE_COLORS[f.type]??'text-b-muted'}`}>{f.type}</span>
-                        <span className="text-[11px] text-b-dim truncate">{f.note}</span>
-                      </div>
-                    ))}
-                    {(t.relations?.length ?? 0) > 0 && (
-                      <div className="px-4 py-2 border-t border-b-border/40">
-                        {t.relations!.map((r,i)=>(
-                          <div key={i} className="flex items-center gap-1.5">
-                            <Link2 size={10} className="text-b-muted flex-shrink-0"/>
-                            <span className="text-[10px] font-mono text-b-muted">{r}</span>
-                          </div>
+                    {open ? <ChevronDown size={13} className="text-b-muted" /> : <ChevronRight size={13} className="text-b-muted" />}
+                  </button>
+
+                  {open && (
+                    <div className="border-t border-b-border">
+                      <div className="grid grid-cols-[1fr_94px_1fr] bg-b-bg/50 px-4 py-1.5">
+                        {['Field', 'Type', 'Notes'].map((header) => (
+                          <span key={header} className="text-[9px] font-semibold uppercase tracking-widest text-b-dim">
+                            {header}
+                          </span>
                         ))}
                       </div>
-                    )}
-                  </div>
-                )}
-              </div>
-            ))}
 
-            {/* API contracts */}
+                      {fields.length > 0 ? (
+                        fields.map((field, index) => {
+                          const note = field.note ?? 'No description';
+                          const isPrimary = /primary|pk/i.test(note);
+                          return (
+                            <div
+                              key={`${table.name}-${field.name}-${index}`}
+                              className={`grid grid-cols-[1fr_94px_1fr] items-center px-4 py-2 hover:bg-b-elev/25 ${
+                                index < fields.length - 1 ? 'border-b border-b-border/40' : ''
+                              }`}
+                            >
+                              <div className="flex items-center gap-1.5">
+                                {isPrimary && <Key size={10} className="flex-shrink-0 text-amber-400" />}
+                                <span className="truncate font-mono text-[12px] text-white">{field.name}</span>
+                                {field.nullable === false && <span className="text-[9px] text-red-400/70">NN</span>}
+                              </div>
+                              <span className={`font-mono text-[11px] font-semibold ${TYPE_COLORS[field.type] ?? 'text-b-muted'}`}>
+                                {field.type}
+                              </span>
+                              <span className="truncate text-[11px] text-b-dim">{note}</span>
+                            </div>
+                          );
+                        })
+                      ) : (
+                        <p className="px-4 py-3 text-xs text-b-dim">No fields provided for this table.</p>
+                      )}
+
+                      {relations.length > 0 && (
+                        <div className="border-t border-b-border/40 px-4 py-2">
+                          {relations.map((relation, index) => (
+                            <div key={`${table.name}-relation-${index}`} className="flex items-center gap-1.5">
+                              <Link2 size={10} className="flex-shrink-0 text-b-muted" />
+                              <span className="font-mono text-[10px] text-b-muted">{relation}</span>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+
             {(bundle?.api_contracts?.length ?? 0) > 0 && (
               <div>
-                <p className="text-[10px] font-semibold uppercase tracking-widest text-b-dim mb-2 mt-2">API Contracts</p>
-                {bundle!.api_contracts.map((c,i)=>(
-                  <div key={i} className="flex items-center gap-2 bg-b-surf border border-b-border rounded-lg px-3 py-2 mb-1.5">
-                    <FileCode2 size={11} className="text-b-muted flex-shrink-0"/>
-                    <span className="text-[11px] font-mono text-b-muted">{c}</span>
+                <p className="mb-2 mt-2 text-[10px] font-semibold uppercase tracking-widest text-b-dim">API Contracts</p>
+                {(bundle?.api_contracts ?? []).map((contract, index) => (
+                  <div
+                    key={`${contract}-${index}`}
+                    className="mb-1.5 flex items-center gap-2 rounded-lg border border-b-border bg-b-surf px-3 py-2"
+                  >
+                    <FileCode2 size={11} className="flex-shrink-0 text-b-muted" />
+                    <span className="font-mono text-[11px] text-b-muted">{contract}</span>
                   </div>
                 ))}
               </div>

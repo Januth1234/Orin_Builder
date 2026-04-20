@@ -1,132 +1,283 @@
-import React, { lazy, Suspense, useRef, useEffect } from 'react';
-import { Eye, Code2, LayoutTemplate, Database as DbIcon, ChevronRight, Loader2, AlertCircle, RefreshCw, LogOut, Menu, MessageSquare } from 'lucide-react';
+﻿import React, { lazy, Suspense, useEffect, useMemo, useRef } from 'react';
+import {
+  AlertCircle,
+  ChevronRight,
+  Code2,
+  Database as DbIcon,
+  Eye,
+  LayoutTemplate,
+  Loader2,
+  LogOut,
+  Menu,
+  MessageSquare,
+  RefreshCw,
+  Sparkles,
+} from 'lucide-react';
+import type { LucideIcon } from 'lucide-react';
 import { useBuilderStore } from '../services/builderStore';
 import { firebaseService } from '../services/firebaseService';
-import BuilderSidebar from './BuilderSidebar';
 import { BuilderTab, BUILD_STATE_META } from '../types';
 import { APP_CONFIG } from '../config';
+import BuilderSidebar from './BuilderSidebar';
 
-const PreviewPanel   = lazy(() => import('./panels/PreviewPanel'));
-const CodePanel      = lazy(() => import('./panels/CodePanel'));
+const PreviewPanel = lazy(() => import('./panels/PreviewPanel'));
+const CodePanel = lazy(() => import('./panels/CodePanel'));
 const BlueprintPanel = lazy(() => import('./panels/BlueprintPanel'));
-const DatabasePanel  = lazy(() => import('./panels/DatabasePanel'));
+const DatabasePanel = lazy(() => import('./panels/DatabasePanel'));
 
-const TABS: { id: BuilderTab; label: string; Icon: React.FC<any> }[] = [
-  { id: 'preview',   label: 'Preview',   Icon: Eye },
-  { id: 'code',      label: 'Code',      Icon: Code2 },
+const TABS: { id: BuilderTab; label: string; Icon: LucideIcon }[] = [
+  { id: 'preview', label: 'Preview', Icon: Eye },
+  { id: 'code', label: 'Code', Icon: Code2 },
   { id: 'blueprint', label: 'Blueprint', Icon: LayoutTemplate },
-  { id: 'database',  label: 'Database',  Icon: DbIcon },
+  { id: 'database', label: 'Database', Icon: DbIcon },
 ];
 
 const BuilderApp: React.FC = () => {
   const {
-    prompt, setPrompt, generate, refine, refinePrompt, setRefinePrompt,
-    state, error, newProject, user, abort,
-    activeTab, setActiveTab, sidebarOpen, setSidebarOpen,
-    currentProject, progress,
-    clarificationQuestions, clarificationAnswers, setClarificationAnswer, submitClarification,
+    prompt,
+    setPrompt,
+    generate,
+    refine,
+    refinePrompt,
+    setRefinePrompt,
+    state,
+    error,
+    newProject,
+    user,
+    abort,
+    activeTab,
+    setActiveTab,
+    sidebarOpen,
+    setSidebarOpen,
+    currentProject,
+    progress,
+    clarificationQuestions,
+    clarificationAnswers,
+    setClarificationAnswer,
+    submitClarification,
   } = useBuilderStore();
 
-  const inputRef = useRef<HTMLInputElement>(null);
-  const isBuilding = !['queued','complete','failed'].includes(state);
-  const hasResult  = !!currentProject?.bundle?.files?.length;
+  const promptRef = useRef<HTMLInputElement>(null);
+  const refineRef = useRef<HTMLInputElement>(null);
+
+  const waitingForClarification = state === 'clarification_needed';
+  const isBuilding = !['queued', 'complete', 'failed'].includes(state);
+  const hasResult = !!currentProject?.bundle?.files?.length;
+  const warningsCount = currentProject?.bundle?.validation?.warnings?.length ?? 0;
+
+  const shortcutPrefix = useMemo(() => {
+    if (typeof window === 'undefined') return 'Ctrl';
+    return /Mac|iPhone|iPad|iPod/.test(window.navigator.platform) ? 'Cmd' : 'Ctrl';
+  }, []);
 
   useEffect(() => {
-    if (!isBuilding) inputRef.current?.focus();
+    if (!isBuilding) promptRef.current?.focus();
   }, [isBuilding]);
 
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (!(event.metaKey || event.ctrlKey)) return;
+      const key = event.key.toLowerCase();
+
+      if (key === 'k') {
+        event.preventDefault();
+        if (!isBuilding) newProject();
+        return;
+      }
+
+      if (key !== 'enter') return;
+
+      event.preventDefault();
+      if (isBuilding) return;
+
+      const activeElement = document.activeElement;
+      if (activeElement === refineRef.current) {
+        if (refinePrompt.trim()) void refine();
+        return;
+      }
+
+      if (activeElement === promptRef.current || !hasResult) {
+        if (prompt.trim()) void generate();
+        return;
+      }
+
+      if (refinePrompt.trim()) {
+        void refine();
+      } else if (prompt.trim()) {
+        void generate();
+      }
+    };
+
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [generate, hasResult, isBuilding, newProject, prompt, refine, refinePrompt]);
+
+  const runGenerate = () => {
+    if (!isBuilding && prompt.trim()) void generate();
+  };
+
+  const runRefine = () => {
+    if (!isBuilding && refinePrompt.trim()) void refine();
+  };
+
+  const renderPanel = () => {
+    if (!hasResult) return <PreviewPanel />;
+    if (activeTab === 'preview') return <PreviewPanel />;
+    if (activeTab === 'code') return <CodePanel />;
+    if (activeTab === 'blueprint') return <BlueprintPanel />;
+    return <DatabasePanel />;
+  };
+
   return (
-    <div className="flex h-screen w-screen overflow-hidden bg-b-bg text-white">
+    <div className="relative flex h-screen w-screen overflow-hidden bg-b-bg text-white">
       <BuilderSidebar />
 
-      <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
-        {/* Top bar */}
-        <header className="flex items-center gap-2 px-3 py-2.5 border-b border-b-border bg-b-surf flex-shrink-0">
+      {sidebarOpen && (
+        <button
+          type="button"
+          aria-label="Close sidebar overlay"
+          onClick={() => setSidebarOpen(false)}
+          className="fixed inset-0 z-20 bg-black/45 lg:hidden"
+        />
+      )}
+
+      <div className="relative z-10 flex min-w-0 flex-1 flex-col overflow-hidden">
+        <header className="flex flex-wrap items-center gap-2 border-b border-b-border bg-b-surf px-3 py-2.5 sm:flex-nowrap sm:gap-3 sm:px-4">
           {!sidebarOpen && (
-            <button onClick={() => setSidebarOpen(true)} className="p-1.5 rounded-md text-b-muted hover:text-white hover:bg-b-elev transition-colors">
+            <button
+              onClick={() => setSidebarOpen(true)}
+              className="rounded-md p-1.5 text-b-muted transition-colors hover:bg-b-elev hover:text-white"
+              title="Open sidebar"
+            >
               <Menu size={15} />
             </button>
           )}
-          <a href={APP_CONFIG.mainAppUrl} target="_blank" rel="noreferrer" className="flex items-center gap-1.5 flex-shrink-0">
-            <span className="text-sm font-bold"><span className="text-b-accent">Orin</span><span className="text-b-blue">AI</span></span>
+
+          <a
+            href={APP_CONFIG.mainAppUrl}
+            target="_blank"
+            rel="noreferrer"
+            className="flex flex-shrink-0 items-center gap-1.5"
+          >
+            <span className="text-sm font-bold">
+              <span className="text-b-accent">Orin</span>
+              <span className="text-b-blue">AI</span>
+            </span>
             <ChevronRight size={11} className="text-b-dim" />
             <span className="text-sm font-semibold text-white">Builder</span>
           </a>
 
-          {/* Prompt input */}
-          <div className="flex-1 flex items-center bg-b-elev border border-b-border rounded-xl px-3 py-1.5 gap-2 focus-within:border-b-accent/50 transition-colors">
+          <div className="order-3 flex w-full min-w-0 flex-1 items-center gap-2 rounded-xl border border-b-border bg-b-elev px-3 py-1.5 focus-within:border-b-accent/55 sm:order-none">
+            <Sparkles size={14} className="hidden flex-shrink-0 text-b-accent sm:block" />
             <input
-              ref={inputRef}
-              className="flex-1 bg-transparent text-sm text-white placeholder-b-dim outline-none min-w-0"
-              placeholder='Describe your website… e.g. "A SaaS landing page for an AI scheduling tool"'
+              ref={promptRef}
+              className="min-w-0 flex-1 bg-transparent text-sm text-white placeholder-b-dim outline-none"
+              placeholder='Describe your website, for example: "A SaaS landing page for an AI scheduling tool"'
               value={prompt}
               disabled={isBuilding}
-              onChange={e => setPrompt(e.target.value)}
-              onKeyDown={e => e.key === 'Enter' && !isBuilding && generate()}
+              onChange={(event) => setPrompt(event.target.value)}
+              onKeyDown={(event) => {
+                if (event.key === 'Enter' && !isBuilding) runGenerate();
+              }}
             />
             {isBuilding && (
-              <div className="flex items-center gap-2 flex-shrink-0">
-                <span className="text-[11px] text-b-accent font-mono">{progress}%</span>
-                <Loader2 size={13} className="text-b-accent animate-spin-slow" />
+              <div className="flex flex-shrink-0 items-center gap-2">
+                <span className="font-mono text-[11px] text-b-accent">{progress}%</span>
+                <Loader2 size={13} className="animate-spin-slow text-b-accent" />
               </div>
             )}
           </div>
 
           {!hasResult ? (
-            <button onClick={generate} disabled={isBuilding || !prompt.trim()}
-              className="flex items-center gap-1.5 px-4 py-2 rounded-xl text-sm font-semibold bg-b-accent text-black hover:bg-green-400 disabled:opacity-40 disabled:pointer-events-none transition-all active:scale-[0.97] flex-shrink-0">
-              {isBuilding ? <Loader2 size={13} className="animate-spin-slow" /> : '⚡'}
-              {isBuilding ? 'Building…' : 'Generate'}
+            <button
+              onClick={runGenerate}
+              disabled={isBuilding || !prompt.trim()}
+              className="flex flex-shrink-0 items-center gap-1.5 rounded-xl bg-b-accent px-4 py-2 text-sm font-semibold text-black transition-all hover:bg-green-400 active:scale-[0.98] disabled:pointer-events-none disabled:opacity-40"
+              title={`${shortcutPrefix}+Enter`}
+            >
+              {isBuilding ? <Loader2 size={13} className="animate-spin-slow" /> : <Sparkles size={13} />}
+              {isBuilding ? 'Building' : 'Generate'}
             </button>
           ) : (
-            <div className="flex items-center gap-1 flex-shrink-0">
-              <button onClick={generate} disabled={isBuilding || !prompt.trim()}
-                className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-medium bg-b-accent text-black hover:bg-green-400 disabled:opacity-30 transition-all">
-                ↺ Rebuild
+            <div className="flex flex-shrink-0 items-center gap-1">
+              <button
+                onClick={runGenerate}
+                disabled={isBuilding || !prompt.trim()}
+                className="rounded-lg bg-b-accent px-2.5 py-1.5 text-xs font-medium text-black transition-all hover:bg-green-400 disabled:opacity-30"
+                title={`${shortcutPrefix}+Enter`}
+              >
+                Rebuild
               </button>
-              <button onClick={newProject} className="px-2.5 py-1.5 rounded-lg text-xs font-medium border border-b-border text-b-muted hover:text-white hover:border-b-muted transition-colors">
-                + New
+              <button
+                onClick={newProject}
+                disabled={isBuilding}
+                className="rounded-lg border border-b-border px-2.5 py-1.5 text-xs font-medium text-b-muted transition-colors hover:border-b-muted hover:text-white disabled:opacity-30"
+                title={`${shortcutPrefix}+K`}
+              >
+                New
               </button>
             </div>
           )}
 
           {user && (
-            <div className="flex items-center gap-1 flex-shrink-0">
-              {user.avatar
-                ? <img src={user.avatar} alt="" className="w-7 h-7 rounded-full border border-b-border"/>
-                : <div className="w-7 h-7 rounded-full bg-b-elev border border-b-border flex items-center justify-center text-xs font-bold text-b-accent">{user.name[0]}</div>
-              }
-              <button onClick={() => firebaseService.logout()} className="p-1.5 rounded-md text-b-dim hover:text-b-muted transition-colors" title="Sign out">
-                <LogOut size={13}/>
+            <div className="ml-auto flex flex-shrink-0 items-center gap-1.5 sm:ml-0">
+              {user.avatar ? (
+                <img src={user.avatar} alt="" className="h-7 w-7 rounded-full border border-b-border" />
+              ) : (
+                <div className="flex h-7 w-7 items-center justify-center rounded-full border border-b-border bg-b-elev text-xs font-bold text-b-accent">
+                  {user.name[0]}
+                </div>
+              )}
+              <button
+                onClick={() => firebaseService.logout()}
+                className="rounded-md p-1.5 text-b-dim transition-colors hover:bg-b-elev hover:text-b-muted"
+                title="Sign out"
+              >
+                <LogOut size={13} />
               </button>
             </div>
           )}
         </header>
 
-        {/* Error banner */}
         {state === 'failed' && error && (
-          <div className="flex items-center justify-between px-4 py-2 bg-red-950/40 border-b border-red-800/40 flex-shrink-0">
-            <div className="flex items-center gap-2 text-red-400 text-xs">
-              <AlertCircle size={13}/><span>{error}</span>
+          <div className="flex items-center justify-between gap-2 border-b border-red-800/40 bg-red-950/40 px-4 py-2">
+            <div className="flex items-center gap-2 text-xs text-red-300">
+              <AlertCircle size={13} />
+              <span>{error}</span>
             </div>
-            <button onClick={generate} disabled={!prompt.trim()} className="flex items-center gap-1 text-[11px] text-red-400 hover:text-red-300 transition-colors">
-              <RefreshCw size={11}/> Retry
+            <button
+              onClick={runGenerate}
+              disabled={!prompt.trim() || isBuilding}
+              className="flex items-center gap-1 text-[11px] text-red-300 transition-colors hover:text-red-200 disabled:opacity-40"
+            >
+              <RefreshCw size={11} />
+              Retry
             </button>
           </div>
         )}
 
-        {/* Status bar (building) */}
-        {isBuilding && (
-          <div className="flex items-center justify-between px-4 py-1.5 bg-b-accent/5 border-b border-b-accent/20 flex-shrink-0">
-            <span className="text-[11px] text-b-accent font-medium">{BUILD_STATE_META[state]?.label}</span>
-            <div className="flex items-center gap-3">
-              <span className="text-[11px] text-b-muted">{BUILD_STATE_META[state]?.message}</span>
-              <button onClick={abort} className="text-[11px] text-b-dim hover:text-red-400 transition-colors">✕ Abort</button>
+        {(isBuilding || waitingForClarification) && (
+          <div className="border-b border-b-accent/20 bg-b-accent/6 px-4 py-2">
+            <div className="mb-1.5 flex items-center justify-between gap-3">
+              <span className="text-xs font-semibold text-b-accent">{BUILD_STATE_META[state]?.label}</span>
+              <div className="flex items-center gap-2 text-[11px] text-b-muted">
+                <span className="font-mono text-b-accent">{progress}%</span>
+                <button
+                  onClick={abort}
+                  className="text-b-dim transition-colors hover:text-red-400"
+                  disabled={!isBuilding}
+                >
+                  Abort
+                </button>
+              </div>
             </div>
+            <div className="h-1.5 w-full overflow-hidden rounded-full bg-b-border">
+              <div className="h-full rounded-full bg-b-accent transition-all duration-500" style={{ width: `${progress}%` }} />
+            </div>
+            <p className="mt-1.5 text-[11px] text-b-muted">{BUILD_STATE_META[state]?.message}</p>
           </div>
         )}
 
-        {/* Clarification overlay */}
         {clarificationQuestions && clarificationQuestions.length > 0 && (
           <ClarificationBanner
             questions={clarificationQuestions}
@@ -136,51 +287,69 @@ const BuilderApp: React.FC = () => {
           />
         )}
 
-        {/* Tab bar */}
         {hasResult && (
-          <div className="flex items-center border-b border-b-border bg-b-surf flex-shrink-0 px-1">
-            {TABS.map(({ id, label, Icon }) => (
-              <button key={id} onClick={() => setActiveTab(id)}
-                className={`flex items-center gap-1.5 px-4 py-2.5 text-xs font-medium border-b-2 transition-colors ${
-                  activeTab === id ? 'border-b-accent text-white' : 'border-transparent text-b-muted hover:text-white hover:border-b-border'
-                }`}>
-                <Icon size={12}/>{label}
-              </button>
-            ))}
-            {(currentProject?.bundle?.validation?.warnings?.length ?? 0) > 0 && (
-              <span className="ml-auto mr-3 text-[10px] text-amber-400 flex items-center gap-1">
-                ⚠ {currentProject?.bundle?.validation?.warnings.length} warning{(currentProject?.bundle?.validation?.warnings?.length ?? 0) > 1 ? 's' : ''}
+          <div className="flex items-center border-b border-b-border bg-b-surf px-1">
+            <div className="no-scrollbar flex min-w-0 flex-1 overflow-x-auto">
+              {TABS.map(({ id, label, Icon }) => (
+                <button
+                  key={id}
+                  onClick={() => setActiveTab(id)}
+                  className={`flex flex-shrink-0 items-center gap-1.5 border-b-2 px-4 py-2.5 text-xs font-medium transition-all ${
+                    activeTab === id
+                      ? 'border-b-accent text-white'
+                      : 'border-transparent text-b-muted hover:border-b-border hover:text-white'
+                  }`}
+                >
+                  <Icon size={12} />
+                  {label}
+                </button>
+              ))}
+            </div>
+
+            {warningsCount > 0 && (
+              <span className="mr-3 flex flex-shrink-0 items-center gap-1 text-[10px] text-amber-400">
+                <AlertCircle size={10} />
+                {warningsCount} warning{warningsCount > 1 ? 's' : ''}
               </span>
             )}
           </div>
         )}
 
-        {/* Main panel */}
         <main className="flex-1 overflow-hidden">
-          <Suspense fallback={<div className="flex h-full items-center justify-center"><Loader2 size={18} className="text-b-accent animate-spin-slow"/></div>}>
-            {(!hasResult) && <PreviewPanel />}
-            {hasResult && activeTab === 'preview'   && <PreviewPanel />}
-            {hasResult && activeTab === 'code'      && <CodePanel />}
-            {hasResult && activeTab === 'blueprint' && <BlueprintPanel />}
-            {hasResult && activeTab === 'database'  && <DatabasePanel />}
+          <Suspense
+            fallback={
+              <div className="flex h-full items-center justify-center">
+                <Loader2 size={18} className="animate-spin-slow text-b-accent" />
+              </div>
+            }
+          >
+            <div key={hasResult ? activeTab : 'preview'} className="view-enter h-full">
+              {renderPanel()}
+            </div>
           </Suspense>
         </main>
 
-        {/* Refine bar */}
         {hasResult && (
-          <div className="flex items-center gap-2 px-3 py-2 border-t border-b-border bg-b-surf flex-shrink-0">
-            <MessageSquare size={13} className="text-b-muted flex-shrink-0" />
+          <div className="flex items-center gap-2 border-t border-b-border bg-b-surf px-3 py-2">
+            <MessageSquare size={13} className="flex-shrink-0 text-b-muted" />
             <input
-              className="flex-1 bg-b-elev border border-b-border rounded-xl px-3 py-1.5 text-sm text-white placeholder-b-dim outline-none focus:border-b-accent/50 transition-colors min-w-0"
-              placeholder="Refine: add dark mode, add pricing section, change hero font…"
+              ref={refineRef}
+              className="min-w-0 flex-1 rounded-xl border border-b-border bg-b-elev px-3 py-1.5 text-sm text-white placeholder-b-dim outline-none transition-colors focus:border-b-accent/50"
+              placeholder="Refine: add pricing table, improve hero copy, adjust typography"
               value={refinePrompt}
               disabled={isBuilding}
-              onChange={e => setRefinePrompt(e.target.value)}
-              onKeyDown={e => e.key === 'Enter' && !isBuilding && refine()}
+              onChange={(event) => setRefinePrompt(event.target.value)}
+              onKeyDown={(event) => {
+                if (event.key === 'Enter' && !isBuilding) runRefine();
+              }}
             />
-            <button onClick={refine} disabled={isBuilding || !refinePrompt.trim()}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold bg-b-elev border border-b-border text-b-muted hover:text-white hover:border-b-muted disabled:opacity-40 disabled:pointer-events-none transition-all flex-shrink-0">
-              {isBuilding ? <Loader2 size={12} className="animate-spin-slow"/> : '↻'}
+            <button
+              onClick={runRefine}
+              disabled={isBuilding || !refinePrompt.trim()}
+              className="flex flex-shrink-0 items-center gap-1.5 rounded-xl border border-b-border bg-b-elev px-3 py-1.5 text-xs font-semibold text-b-muted transition-all hover:border-b-muted hover:text-white disabled:pointer-events-none disabled:opacity-40"
+              title={`${shortcutPrefix}+Enter`}
+            >
+              {isBuilding ? <Loader2 size={12} className="animate-spin-slow" /> : <Sparkles size={12} />}
               Refine
             </button>
           </div>
@@ -190,39 +359,46 @@ const BuilderApp: React.FC = () => {
   );
 };
 
-// ── Clarification overlay ─────────────────────────────────────────────────────
 const ClarificationBanner: React.FC<{
   questions: string[];
   answers: Record<string, string>;
   onAnswer: (q: string, a: string) => void;
   onSubmit: () => void;
 }> = ({ questions, answers, onAnswer, onSubmit }) => {
-  const allAnswered = questions.every(q => (answers[q] ?? '').trim().length > 0);
+  const allAnswered = questions.every((question) => (answers[question] ?? '').trim().length > 0);
+
   return (
-    <div className="px-4 py-3 bg-amber-950/30 border-b border-amber-800/40 flex-shrink-0">
-      <p className="text-[11px] font-semibold text-amber-300 mb-2 flex items-center gap-1.5">
-        <span>?</span> A few details needed before we continue
+    <div className="border-b border-amber-800/45 bg-amber-950/30 px-4 py-3">
+      <p className="mb-2 flex items-center gap-1.5 text-xs font-semibold text-amber-300">
+        Clarification needed before generation can continue
       </p>
+
       <div className="flex flex-col gap-2">
-        {questions.map((q, i) => (
-          <div key={i} className="flex items-start gap-2">
-            <span className="text-[11px] text-amber-200/70 mt-1.5 flex-shrink-0 w-4">{i+1}.</span>
-            <div className="flex-1 flex flex-col gap-1">
-              <span className="text-[11px] text-amber-200/80">{q}</span>
+        {questions.map((question, index) => (
+          <div key={question} className="flex items-start gap-2">
+            <span className="mt-1.5 w-4 flex-shrink-0 text-[11px] text-amber-200/70">{index + 1}.</span>
+            <div className="flex flex-1 flex-col gap-1">
+              <span className="text-[11px] text-amber-200/85">{question}</span>
               <input
-                className="bg-b-elev border border-amber-800/40 rounded-lg px-2.5 py-1 text-xs text-white placeholder-b-dim outline-none focus:border-amber-600/50 transition-colors"
-                placeholder="Your answer…"
-                value={answers[q] ?? ''}
-                onChange={e => onAnswer(q, e.target.value)}
-                onKeyDown={e => e.key === 'Enter' && allAnswered && onSubmit()}
+                className="rounded-lg border border-amber-800/45 bg-b-elev px-2.5 py-1 text-xs text-white placeholder-b-dim outline-none transition-colors focus:border-amber-600/60"
+                placeholder="Your answer"
+                value={answers[question] ?? ''}
+                onChange={(event) => onAnswer(question, event.target.value)}
+                onKeyDown={(event) => {
+                  if (event.key === 'Enter' && allAnswered) onSubmit();
+                }}
               />
             </div>
           </div>
         ))}
       </div>
-      <button onClick={onSubmit} disabled={!allAnswered}
-        className="mt-2 px-4 py-1.5 rounded-lg text-xs font-semibold bg-amber-600 text-white hover:bg-amber-500 disabled:opacity-40 disabled:pointer-events-none transition-colors">
-        Continue Build →
+
+      <button
+        onClick={onSubmit}
+        disabled={!allAnswered}
+        className="mt-2 rounded-lg bg-amber-600 px-4 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-amber-500 disabled:pointer-events-none disabled:opacity-40"
+      >
+        Continue Build
       </button>
     </div>
   );

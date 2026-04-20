@@ -1,131 +1,193 @@
-import React from 'react';
-import { Layout, Globe, Palette, Users, Tag as TagIcon, Layers, AlertTriangle, CheckCircle2 } from 'lucide-react';
+﻿import React from 'react';
+import { AlertTriangle, CheckCircle2, Globe, Layers, Layout, Palette, Tag as TagIcon, Users } from 'lucide-react';
 import { useBuilderStore } from '../../services/builderStore';
 
 const BlueprintPanel: React.FC = () => {
   const { currentProject } = useBuilderStore();
-  const bp = currentProject?.blueprint;
+  const blueprint = currentProject?.blueprint;
   const bundle = currentProject?.bundle;
 
-  if (!bp) return <Empty text="Blueprint will appear after generation." />;
+  if (!blueprint) {
+    return <Empty text="Blueprint will appear after generation." />;
+  }
 
   const toneColor: Record<string, string> = {
-    professional:'text-blue-300 bg-blue-950/40 border-blue-800/30',
-    playful:'text-amber-300 bg-amber-950/40 border-amber-800/30',
-    minimal:'text-gray-300 bg-gray-800/40 border-gray-700/30',
-    bold:'text-purple-300 bg-purple-950/40 border-purple-800/30',
-    elegant:'text-rose-300 bg-rose-950/40 border-rose-800/30',
+    professional: 'text-blue-300 bg-blue-950/35 border-blue-800/35',
+    playful: 'text-amber-300 bg-amber-950/35 border-amber-800/35',
+    minimal: 'text-gray-300 bg-gray-800/35 border-gray-700/35',
+    bold: 'text-purple-300 bg-purple-950/35 border-purple-800/35',
+    elegant: 'text-rose-300 bg-rose-950/35 border-rose-800/35',
   };
+
   const sectionColor: Record<string, string> = {
-    navbar:'#4d9fff',hero:'#22c892',features:'#b47edc',pricing:'#f1b982',
-    testimonials:'#7dd3fc',cta:'#f87171',footer:'#686b7e',contact:'#34d399',
-    gallery:'#c084fc',blog:'#fb923c',team:'#38bdf8',faq:'#a3e635',custom:'#94a3b8',
+    navbar: '#4d9fff',
+    hero: '#22c892',
+    features: '#b47edc',
+    pricing: '#f1b982',
+    testimonials: '#7dd3fc',
+    cta: '#f87171',
+    footer: '#686b7e',
+    contact: '#34d399',
+    gallery: '#c084fc',
+    blog: '#fb923c',
+    team: '#38bdf8',
+    faq: '#a3e635',
+    custom: '#94a3b8',
   };
+
+  const sections = blueprint.sections ?? [];
+  const pages = blueprint.pages ?? [];
+  const components = blueprint.components ?? [];
+  const warnings = bundle?.validation?.warnings ?? [];
+  const keywords = blueprint.seoKeywords ?? [];
 
   return (
-    <div className="h-full overflow-y-auto custom-scrollbar p-4 flex flex-col gap-4">
-      {/* Header */}
-      <div className="flex items-start justify-between gap-3">
+    <div className="custom-scrollbar flex h-full flex-col gap-4 overflow-y-auto p-4">
+      <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <div className="flex items-center gap-2 mb-0.5">
-            <h2 className="text-lg font-bold text-white">{bp.siteName}</h2>
-            <span className="text-[10px] font-mono text-b-dim bg-b-elev border border-b-border px-1.5 py-0.5 rounded">{bp.project_type}</span>
+          <div className="mb-1 flex items-center gap-2">
+            <h2 className="text-lg font-bold text-white">{blueprint.siteName}</h2>
+            <span className="rounded bg-b-elev px-1.5 py-0.5 text-[10px] font-mono text-b-dim border border-b-border">
+              {blueprint.project_type}
+            </span>
           </div>
-          <p className="text-sm text-b-muted">{bp.tagline}</p>
+          <p className="text-sm text-b-muted">{blueprint.tagline || 'No tagline provided.'}</p>
         </div>
-        <span className={`text-[11px] px-2 py-1 rounded-full border font-medium flex-shrink-0 ${toneColor[bp.tone] ?? 'text-b-muted bg-b-elev border-b-border'}`}>{bp.tone}</span>
+        <span
+          className={`rounded-full border px-2 py-1 text-[11px] font-medium ${
+            toneColor[blueprint.tone] ?? 'border-b-border bg-b-elev text-b-muted'
+          }`}
+        >
+          {blueprint.tone}
+        </span>
       </div>
 
-      <div className="grid grid-cols-2 gap-3">
-        <Card icon={<Layout size={13}/>} title="Pages">
-          <div className="flex flex-wrap gap-1 mt-1.5">
-            {bp.pages?.map((p,i)=><TagChip key={i} name={p} />)}
-          </div>
+      <div className="grid gap-3 sm:grid-cols-2">
+        <Card icon={<Layout size={13} />} title="Pages">
+          {pages.length > 0 ? (
+            <div className="mt-1.5 flex flex-wrap gap-1">
+              {pages.map((page) => (
+                <TagChip key={page} name={page} />
+              ))}
+            </div>
+          ) : (
+            <p className="mt-1.5 text-[11px] text-b-dim">No pages listed.</p>
+          )}
         </Card>
-        <Card icon={<Layers size={13}/>} title="Tech Stack">
-          <div className="flex flex-wrap gap-1 mt-1.5">
-            {bp.components?.slice(0,6).map((c,i)=><span key={i} className="text-[10px] bg-b-accent/10 border border-b-accent/25 text-b-accent rounded px-1.5 py-0.5">{c}</span>)}
-          </div>
+
+        <Card icon={<Layers size={13} />} title="Components">
+          {components.length > 0 ? (
+            <div className="mt-1.5 flex flex-wrap gap-1">
+              {components.slice(0, 10).map((component) => (
+                <span
+                  key={component}
+                  className="rounded border border-b-accent/25 bg-b-accent/10 px-1.5 py-0.5 text-[10px] text-b-accent"
+                >
+                  {component}
+                </span>
+              ))}
+            </div>
+          ) : (
+            <p className="mt-1.5 text-[11px] text-b-dim">No components listed.</p>
+          )}
         </Card>
-        <Card icon={<Palette size={13}/>} title="Colours">
+
+        <Card icon={<Palette size={13} />} title="Color Scheme">
           <div className="mt-1.5 flex flex-col gap-1">
-            {bp.colorScheme && Object.entries(bp.colorScheme).map(([k,v])=>(
-              <div key={k} className="flex items-center justify-between">
+            {Object.entries(blueprint.colorScheme ?? {}).map(([key, value]) => (
+              <div key={key} className="flex items-center justify-between gap-2">
                 <div className="flex items-center gap-1.5">
-                  <div className="w-3.5 h-3.5 rounded border border-white/10" style={{background:v as string}} />
-                  <span className="text-[11px] text-b-muted capitalize">{k}</span>
+                  <div className="h-3.5 w-3.5 rounded border border-white/10" style={{ background: value }} />
+                  <span className="text-[11px] capitalize text-b-muted">{key}</span>
                 </div>
-                <span className="text-[10px] font-mono text-b-dim">{v}</span>
+                <span className="font-mono text-[10px] text-b-dim">{value}</span>
               </div>
             ))}
           </div>
         </Card>
+
         <div className="flex flex-col gap-3">
-          <Card icon={<Globe size={13}/>} title="Domain">
-            <p className="text-[12px] font-mono text-b-blue mt-1">{bp.domain}.orinai.app</p>
+          <Card icon={<Globe size={13} />} title="Domain">
+            <p className="mt-1 text-[12px] font-mono text-b-blue">{blueprint.domain}.orinai.app</p>
           </Card>
-          <Card icon={<Users size={13}/>} title="Audience">
-            <p className="text-[11px] text-b-muted mt-1 leading-snug">{bp.audience}</p>
+          <Card icon={<Users size={13} />} title="Audience">
+            <p className="mt-1 text-[11px] leading-snug text-b-muted">{blueprint.audience || 'Audience not specified.'}</p>
           </Card>
         </div>
       </div>
 
-      {/* Sections */}
       <div>
-        <p className="text-[10px] font-semibold uppercase tracking-widest text-b-dim mb-2">Page Structure</p>
-        {bp.sections?.map((s,i)=>(
-          <div key={i} className="flex items-center gap-2.5 bg-b-surf border border-b-border rounded-lg px-3 py-2 mb-1.5">
-            <div className="w-2 h-2 rounded-sm flex-shrink-0" style={{background:sectionColor[s.type]??'#686b7e'}} />
-            <div className="flex-1 min-w-0">
-              <div className="flex items-center gap-2">
-                <span className="text-[12px] font-medium text-white">{s.name}</span>
-                <span className="text-[10px] text-b-dim font-mono">{s.type}</span>
-                {s.hasAnimation && <span className="text-[9px] bg-purple-950/40 border border-purple-800/30 text-purple-300 rounded px-1">✦ anim</span>}
+        <p className="mb-2 text-[10px] font-semibold uppercase tracking-widest text-b-dim">Page Structure</p>
+        {sections.length > 0 ? (
+          sections.map((section, index) => (
+            <div
+              key={`${section.name}-${index}`}
+              className="mb-1.5 flex items-center gap-2.5 rounded-lg border border-b-border bg-b-surf px-3 py-2"
+            >
+              <div className="h-2 w-2 flex-shrink-0 rounded-sm" style={{ background: sectionColor[section.type] ?? '#686b7e' }} />
+              <div className="min-w-0 flex-1">
+                <div className="flex items-center gap-2">
+                  <span className="text-[12px] font-medium text-white">{section.name}</span>
+                  <span className="font-mono text-[10px] text-b-dim">{section.type}</span>
+                  {section.hasAnimation && (
+                    <span className="rounded border border-purple-800/35 bg-purple-950/35 px-1 text-[9px] text-purple-300">
+                      animation
+                    </span>
+                  )}
+                </div>
+                <p className="truncate text-[11px] text-b-muted">{section.purpose || 'No section purpose provided.'}</p>
               </div>
-              <p className="text-[11px] text-b-muted truncate">{s.purpose}</p>
+              <span className="flex-shrink-0 text-[10px] text-b-dim">#{index + 1}</span>
             </div>
-            <span className="text-[10px] text-b-dim flex-shrink-0">#{i+1}</span>
+          ))
+        ) : (
+          <div className="rounded-lg border border-b-border bg-b-surf px-3 py-3 text-[11px] text-b-dim">
+            No section definitions available.
           </div>
-        ))}
+        )}
       </div>
 
-      {/* Risk flags */}
-      {bp.risk_flags?.length > 0 && (
+      {(blueprint.risk_flags?.length ?? 0) > 0 && (
         <div>
-          <p className="text-[10px] font-semibold uppercase tracking-widest text-b-dim mb-2">Risk Flags</p>
-          {bp.risk_flags.map((f,i)=>(
-            <div key={i} className="flex items-start gap-2 py-1">
-              <AlertTriangle size={11} className="text-amber-400 mt-0.5 flex-shrink-0" />
-              <span className="text-[11px] text-amber-300/80">{f}</span>
+          <p className="mb-2 text-[10px] font-semibold uppercase tracking-widest text-b-dim">Risk Flags</p>
+          {blueprint.risk_flags?.map((flag, index) => (
+            <div key={`${flag}-${index}`} className="flex items-start gap-2 py-1">
+              <AlertTriangle size={11} className="mt-0.5 flex-shrink-0 text-amber-400" />
+              <span className="text-[11px] text-amber-300/85">{flag}</span>
             </div>
           ))}
         </div>
       )}
 
-      {/* Validation */}
-      {(bundle?.validation?.warnings?.length ?? 0) > 0 && (
-        <div className="bg-amber-950/20 border border-amber-800/30 rounded-xl px-3 py-2">
-          <p className="text-[10px] font-semibold uppercase tracking-widest text-amber-400 mb-1">Validation Warnings</p>
-          {bundle?.validation?.warnings?.map((w: string, i: number)=>(
-            <p key={i} className="text-[11px] text-amber-300/80">{w}</p>
+      {warnings.length > 0 && (
+        <div className="rounded-xl border border-amber-800/30 bg-amber-950/20 px-3 py-2">
+          <p className="mb-1 text-[10px] font-semibold uppercase tracking-widest text-amber-400">Validation Warnings</p>
+          {warnings.map((warning, index) => (
+            <p key={`${warning}-${index}`} className="text-[11px] text-amber-300/85">
+              {warning}
+            </p>
           ))}
         </div>
       )}
+
       {bundle?.status === 'complete' && (
-        <div className="flex items-center gap-2 bg-b-accent/10 border border-b-accent/25 rounded-xl px-3 py-2">
+        <div className="flex items-center gap-2 rounded-xl border border-b-accent/25 bg-b-accent/10 px-3 py-2">
           <CheckCircle2 size={13} className="text-b-accent" />
-          <span className="text-[12px] text-b-accent font-medium">Build validated and complete</span>
+          <span className="text-[12px] font-medium text-b-accent">Build validated and complete</span>
         </div>
       )}
 
-      {/* SEO keywords */}
-      {bp.seoKeywords?.length > 0 && (
+      {keywords.length > 0 && (
         <div>
-          <p className="text-[10px] font-semibold uppercase tracking-widest text-b-dim mb-1.5">SEO Keywords</p>
+          <p className="mb-1.5 text-[10px] font-semibold uppercase tracking-widest text-b-dim">SEO Keywords</p>
           <div className="flex flex-wrap gap-1.5">
-            {bp.seoKeywords.map((k,i)=>(
-              <span key={i} className="flex items-center gap-1 text-[11px] bg-b-elev border border-b-border text-b-muted rounded-full px-2.5 py-0.5">
-                <TagIcon size={9}/>{k}
+            {keywords.map((keyword) => (
+              <span
+                key={keyword}
+                className="flex items-center gap-1 rounded-full border border-b-border bg-b-elev px-2.5 py-0.5 text-[11px] text-b-muted"
+              >
+                <TagIcon size={9} />
+                {keyword}
               </span>
             ))}
           </div>
@@ -135,19 +197,22 @@ const BlueprintPanel: React.FC = () => {
   );
 };
 
-const TagChip: React.FC<{name:string}> = ({name}) => (
-  <span className="text-[11px] bg-b-bg border border-b-border text-b-muted rounded-md px-2 py-0.5">{name}</span>
+const TagChip: React.FC<{ name: string }> = ({ name }) => (
+  <span className="rounded-md border border-b-border bg-b-bg px-2 py-0.5 text-[11px] text-b-muted">{name}</span>
 );
-const Card: React.FC<{icon:React.ReactNode;title:string;children:React.ReactNode}> = ({icon,title,children}) => (
-  <div className="bg-b-surf border border-b-border rounded-xl p-3">
+
+const Card: React.FC<{ icon: React.ReactNode; title: string; children: React.ReactNode }> = ({ icon, title, children }) => (
+  <div className="rounded-xl border border-b-border bg-b-surf p-3">
     <div className="flex items-center gap-1.5 text-b-muted">
-      {icon}<span className="text-[10px] font-semibold uppercase tracking-widest">{title}</span>
+      {icon}
+      <span className="text-[10px] font-semibold uppercase tracking-widest">{title}</span>
     </div>
     {children}
   </div>
 );
-const Empty: React.FC<{text:string}> = ({text}) => (
-  <div className="flex h-full items-center justify-center text-b-dim text-sm">{text}</div>
+
+const Empty: React.FC<{ text: string }> = ({ text }) => (
+  <div className="flex h-full items-center justify-center text-sm text-b-dim">{text}</div>
 );
 
 export default BlueprintPanel;
