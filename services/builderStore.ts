@@ -143,21 +143,25 @@ export const useBuilderStore = create<BuilderStore>((set, get) => ({
       );
 
       const now = new Date().toISOString();
+      // Sanitize: replace undefined with null so Firestore doesn't reject
+      const safe = <T,>(v: T): T | null => (v === undefined ? null : v) as T | null;
       const project: BuilderProject = {
         id: '',
         userId: user?.id ?? 'guest',
         prompt,
-        // Store ALL plan outputs so DatabasePanel, BlueprintPanel, CodePanel have full data
-        analysis:    result.analysis,
-        blueprint:   result.blueprint,
-        backendPlan: result.backendPlan,
-        databasePlan:result.databasePlan,
-        frontendPlan:result.frontendPlan,
-        bundle:      result.bundle,
-        state:       result.state ?? 'complete',
-        title:       result.title ?? result.blueprint?.siteName ?? 'Untitled',
-        events:      _eventLog,
-        clarifications: result.clarifications,
+        analysis:     safe(result.analysis)     ?? undefined,
+        blueprint:    safe(result.blueprint)    ?? undefined,
+        backendPlan:  safe(result.backendPlan)  ?? undefined,
+        databasePlan: safe(result.databasePlan) ?? undefined,
+        frontendPlan: safe(result.frontendPlan) ?? undefined,
+        bundle:       safe(result.bundle)       ?? undefined,
+        state:        result.state ?? 'complete',
+        title:        result.title ?? result.blueprint?.siteName ?? 'Untitled',
+        // Strip events that have undefined fields — Firestore rejects them
+        events:       (_eventLog ?? []).map(e => Object.fromEntries(
+          Object.entries(e).filter(([, v]) => v !== undefined)
+        )) as any,
+        clarifications: result.clarifications ?? undefined,
         createdAt: now,
         updatedAt: now,
         isPublished: false,

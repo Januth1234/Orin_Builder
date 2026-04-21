@@ -37,11 +37,11 @@ const GEMINI_TEMPERATURE       = 0.25;
 // ── Types ─────────────────────────────────────────────────────────────────────
 export type EventCallback = (event: StreamEvent) => void;
 
-// ── API key / model (mirrors main Orin AI geminiService.ts) ──────────────────
-function getApiKey(): string {
-  const k = process.env.API_KEY;
-  if (k && k.length > 10) return k;
-  throw new Error('API_KEY not configured. Add it to .env.local:\nAPI_KEY=your_gemini_api_key');
+// ── API key / model ───────────────────────────────────────────────────────────
+function getApiKey(): string | null {
+  // Only available in local dev. In production, backend proxy is used.
+  const k = (process.env as any).API_KEY;
+  return (k && k.length > 10) ? k : null;
 }
 
 function getModel(user: UserAccount | null): string {
@@ -51,7 +51,19 @@ function getModel(user: UserAccount | null): string {
     : APP_CONFIG.defaultModel;
 }
 
-// ── Gemini call with retry + abort ────────────────────────────────────────────
+// ── Gemini call — backend proxy (prod) or direct SDK (local dev) ─────────────
+const ORIN_API = 'https://www.orinai.org/api/chat';
+let _cachedIdToken: string | null = null;
+
+async function getIdToken(): Promise<string | null> {
+  try {
+    const { getAuth } = await import('firebase/auth');
+    const tok = await getAuth().currentUser?.getIdToken();
+    _cachedIdToken = tok ?? null;
+    return _cachedIdToken;
+  } catch { return null; }
+}
+
 async function askGemini(
   model: string,
   prompt: string,
@@ -60,7 +72,35 @@ async function askGemini(
   attempt = 1,
 ): Promise<string> {
   if (signal.aborted) throw new DOMException('Aborted', 'AbortError');
-  const ai = new GoogleGenAI({ apiKey: getApiKey() });
+
+  // ── Production: route through /api/chat backend ──────────────────────────
+  try {
+    const idToken = await getIdToken();
+    const r = await fetch(ORIN_API, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...(idToken ? { Authorization: `Bearer ${idToken}` } : {}),
+      },
+      signal,
+      body: JSON.stringify({ mode: 'builder-raw', prompt, maxTokens, model }),
+    });
+    if (r.ok) {
+      const d = await r.json();
+      if (d.text?.trim()) return d.text;
+    }
+    // If backend fails, fall through to local dev fallback
+  } catch (err: any) {
+    if (err?.name === 'AbortError') throw err;
+    // Network error — try local dev key
+  }
+
+  // ── Local dev fallback ────────────────────────────────────────────────────
+  const apiKey = getApiKey();
+  if (!apiKey) throw new Error('Orchestrator: backend unreachable and API_KEY not set for local dev.');
+
+  if (signal.aborted) throw new DOMException('Aborted', 'AbortError');
+  const ai = new GoogleGenAI({ apiKey });
   try {
     const res = await ai.models.generateContent({
       model,
@@ -618,15 +658,50 @@ ${existingClarifications ? `ANSWERS ALREADY PROVIDED: ${JSON.stringify(existingC
       iter++;
       let response: any;
       try {
-        const ai = new GoogleGenAI({ apiKey: getApiKey() });
-        response = await ai.models.generateContent({
-          model: this.model,
-          contents: history,
-          config: { tools: [{ functionDeclarations: TOOL_DECLARATIONS }], maxOutputTokens: 2048, temperature: GEMINI_TEMPERATURE },
+        // ── Backend proxy for function-calling ─────────────────────────────
+        const idToken = await getIdToken();
+        const fcRes = await fetch(ORIN_API, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            ...(idToken ? { Authorization: `Bearer ${idToken}` } : {}),
+          },
+          signal,
+          body: JSON.stringify({
+            mode: 'builder-fc',
+            model: this.model,
+            history,
+            toolDeclarations: TOOL_DECLARATIONS,
+          }),
         });
+        if (!fcRes.ok) throw new Error(`Backend builder-fc error ${fcRes.status}`);
+        response = await fcRes.json();
+        // fallback: try local dev key if backend rejects
+        if (!response || (!response.candidates && !response.functionCalls)) {
+          throw new Error('backend returned empty response');
+        }
       } catch (e: any) {
-        this.transition('failed', state, { message: `Gemini API error: ${e.message}` });
-        return { blueprint, bundle, state: 'failed' as BuildState, error: e.message, clarifications: undefined };
+        if (e?.name === 'AbortError' || signal.aborted) {
+          this.transition('failed', state, { message: 'Aborted' });
+          return { blueprint, bundle, state: 'failed' as BuildState, error: 'Aborted', clarifications: null as any };
+        }
+        // ── Local dev fallback ──────────────────────────────────────────────
+        const apiKey = getApiKey();
+        if (!apiKey) {
+          this.transition('failed', state, { message: `Gemini API error: ${e.message}` });
+          return { blueprint, bundle, state: 'failed' as BuildState, error: e.message, clarifications: null as any };
+        }
+        try {
+          const ai = new GoogleGenAI({ apiKey });
+          response = await ai.models.generateContent({
+            model: this.model,
+            contents: history,
+            config: { tools: [{ functionDeclarations: TOOL_DECLARATIONS }], maxOutputTokens: 2048, temperature: GEMINI_TEMPERATURE },
+          });
+        } catch (e2: any) {
+          this.transition('failed', state, { message: `Gemini API error: ${e2.message}` });
+          return { blueprint, bundle, state: 'failed' as BuildState, error: e2.message, clarifications: null as any };
+        }
       }
 
       if (response.candidates?.[0]?.content?.parts)
@@ -657,7 +732,7 @@ ${existingClarifications ? `ANSWERS ALREADY PROVIDED: ${JSON.stringify(existingC
             ]).catch(() => null);
             if (!answers) {
               this.transition('failed', state, { message: 'Clarification timed out' });
-              return { blueprint, bundle, state: 'failed' as BuildState, error: 'Clarification not provided', clarifications: undefined };
+              return { blueprint, bundle, state: 'failed' as BuildState, error: 'Clarification not provided', clarifications: null as any };
             }
             clarifications = { answers };
             responses.push(makeFnResponse(toolName, fc.id, { answers }));
@@ -688,7 +763,7 @@ ${existingClarifications ? `ANSWERS ALREADY PROVIDED: ${JSON.stringify(existingC
         if (lastErr) {
           if (FATAL_TOOLS.has(toolName)) {
             this.transition('failed', state, { message: lastErr.message });
-            return { blueprint, bundle, state: 'failed' as BuildState, error: lastErr.message, clarifications: undefined };
+            return { blueprint, bundle, state: 'failed' as BuildState, error: lastErr.message, clarifications: null as any };
           }
           this.emit('validation_warning', state, { message: `${toolName} failed (non-fatal): ${lastErr.message}` });
           responses.push(makeFnResponse(toolName, fc.id, { error: lastErr.message }));
@@ -737,7 +812,7 @@ ${existingClarifications ? `ANSWERS ALREADY PROVIDED: ${JSON.stringify(existingC
     }
 
     if (signal.aborted)
-      return { blueprint, bundle, state: 'failed' as BuildState, error: 'Aborted', clarifications: undefined };
+      return { blueprint, bundle, state: 'failed' as BuildState, error: 'Aborted', clarifications: null as any };
 
     const final: BuildState = bundle ? 'complete' : 'failed';
     this.transition(final, state, { progress: 100, artifact_path: 'index.html',
@@ -745,12 +820,16 @@ ${existingClarifications ? `ANSWERS ALREADY PROVIDED: ${JSON.stringify(existingC
     this.emit('build_complete', final, { progress: 100 });
 
     return {
-      analysis, blueprint, backendPlan, databasePlan, frontendPlan,
-      clarifications,
+      analysis:     analysis     ?? null,
+      blueprint:    blueprint    ?? null,
+      backendPlan:  backendPlan  ?? null,
+      databasePlan: databasePlan ?? null,
+      frontendPlan: frontendPlan ?? null,
+      clarifications: clarifications ?? null,
       bundle: bundle ? {
         ...bundle,
         status: bundle.status === 'assembling' ? 'complete' : bundle.status,
-      } : undefined,
+      } : null,
       state: final,
       title: (blueprint as SiteBlueprint | undefined)?.siteName ?? 'Untitled',
     };

@@ -1,20 +1,14 @@
 /**
  * services/geminiBuilderService.ts — Orin Builder
  *
- * Thin wrapper kept for backward compat.
- * All generation is now handled by services/orchestrator.ts.
- * This file exposes a simple refine() helper used by the store.
+ * Refinement helper — POSTs to orinai.org /api/chat (mode=refine-html)
+ * so the Gemini API key stays server-side only.
+ * Falls back to direct SDK call only in local dev (API_KEY in env).
  */
-
 import { GoogleGenAI } from '@google/genai';
 import { APP_CONFIG, PLAN_LIMITS } from '../config';
-import type { UserAccount, ArtifactFile } from '../types';
-
-function getApiKey(): string {
-  const k = process.env.API_KEY;
-  if (k) return k;
-  throw new Error('API_KEY not set. Add it to .env.local');
-}
+import type { UserAccount } from '../types';
+import { firebaseService } from './firebaseService';
 
 function getModel(user: UserAccount | null): string {
   if (!user) return APP_CONFIG.defaultModel;
@@ -23,7 +17,8 @@ function getModel(user: UserAccount | null): string {
 
 /**
  * Apply a refinement instruction to an existing HTML file.
- * Called when the user types in the refine bar after a completed build.
+ * Routes through the main Orin AI backend (/api/chat mode=refine-html)
+ * so the Gemini API key never ships to the browser.
  */
 export async function refineHtml(
   existingHtml: string,
@@ -31,28 +26,48 @@ export async function refineHtml(
   user: UserAccount | null,
   onProgress?: (msg: string) => void,
 ): Promise<string> {
-  const model = getModel(user);
-  const ai    = new GoogleGenAI({ apiKey: getApiKey() });
-
   onProgress?.('Applying refinement…');
 
-  const prompt = `
-You have an existing website HTML. Apply ONLY the requested change. Keep everything else intact.
+  const model = getModel(user);
+  const plan  = (user as any)?.plan ?? 'free';
 
-REFINEMENT: "${instruction}"
+  // ── Try backend proxy first (production) ──────────────────────────────────
+  try {
+    let idToken: string | null = null;
+    try { idToken = await (firebaseService as any).getIdToken?.(); } catch {}
 
-EXISTING HTML:
-${existingHtml}
+    const BACKEND = 'https://www.orinai.org/api/chat';
+    const r = await fetch(BACKEND, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...(idToken ? { Authorization: `Bearer ${idToken}` } : {}),
+      },
+      body: JSON.stringify({
+        mode: 'refine-html',
+        existingHtml,
+        instruction,
+        plan,
+      }),
+    });
 
-Return ONLY the updated HTML — no markdown, no backticks. Start with <!DOCTYPE html>.
-  `.trim();
+    if (r.ok) {
+      const d = await r.json();
+      if (d.html) {
+        onProgress?.('Refinement complete');
+        return d.html;
+      }
+    }
+  } catch { /* fall through to local dev fallback */ }
 
-  const res = await ai.models.generateContent({
-    model,
-    contents: prompt,
-    config: { maxOutputTokens: 16384 },
-  });
+  // ── Local dev fallback (API_KEY in .env.local) ───────────────────────────
+  const apiKey = (process.env as any).API_KEY;
+  if (!apiKey) throw new Error('Refinement failed: backend unavailable and API_KEY not set for local dev.');
 
+  const ai = new GoogleGenAI({ apiKey });
+  const prompt = `You have an existing website HTML. Apply ONLY the requested change. Keep everything else intact.\n\nREFINEMENT: "${instruction}"\n\nEXISTING HTML:\n${existingHtml}\n\nReturn ONLY the updated HTML — no markdown, no backticks. Start with <!DOCTYPE html>.`;
+
+  const res = await ai.models.generateContent({ model, contents: prompt, config: { maxOutputTokens: 16384 } });
   let out = (res.text ?? '').trim();
   if (out.startsWith('```')) out = out.replace(/^```(?:html)?\n?/, '').replace(/\n?```$/, '').trim();
   if (!out.toLowerCase().startsWith('<!doctype')) out = '<!DOCTYPE html>\n' + out;
