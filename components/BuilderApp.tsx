@@ -393,6 +393,7 @@ const BuilderApp: React.FC = () => {
         </button>
       </div>
     </div>
+  </div>
   );
 };
 
