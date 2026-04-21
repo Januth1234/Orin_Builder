@@ -6,20 +6,25 @@ export default defineConfig(({ mode }) => {
   return {
     plugins: [react()],
     build: {
-      chunkSizeWarningLimit: 1000,
+      chunkSizeWarningLimit: 1200,
       minify: 'esbuild',
       target: 'es2020',
       cssMinify: true,
       rollupOptions: {
         output: {
           manualChunks(id) {
-            if (id.includes('@google/genai'))          return 'vendor-ai';
-            if (id.includes('firebase/firestore'))     return 'vendor-firebase-firestore';
-            if (id.includes('firebase/auth'))          return 'vendor-firebase-auth';
-            if (id.includes('firebase'))               return 'vendor-firebase-core';
-            if (id.includes('lucide-react'))           return 'vendor-icons';
-            if (id.includes('zustand'))                return 'vendor-state';
-            if (id.includes('node_modules/react/') || id.includes('node_modules/react-dom/')) return 'vendor-react';
+            if (id.includes('@google/genai'))    return 'vendor-ai';
+
+            // ALL Firebase packages in ONE chunk.
+            // Splitting firebase/auth, firebase/firestore into separate chunks
+            // creates circular Rollup chunk dependencies → TDZ error at runtime:
+            // "Cannot access 'X' before initialization"
+            if (id.includes('firebase') || id.includes('@firebase')) return 'vendor-firebase';
+
+            if (id.includes('react-router'))     return 'vendor-router';
+            if (id.includes('node_modules/react/') || id.includes('node_modules/react-dom/') || id.includes('node_modules/scheduler/')) return 'vendor-react';
+            if (id.includes('lucide-react'))     return 'vendor-icons';
+            if (id.includes('zustand'))          return 'vendor-state';
           },
         },
       },

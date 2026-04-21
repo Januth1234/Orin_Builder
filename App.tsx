@@ -18,11 +18,8 @@ const WorkspaceRoute: React.FC = () => {
 const App: React.FC = () => (
   <BrowserRouter>
     <Routes>
-      {/* / → main builder workspace (auth required) */}
       <Route path="/" element={<WorkspaceRoute />} />
-      {/* /home → marketing landing page (public) */}
       <Route path="/home" element={<LandingPage />} />
-      {/* Catch-all → redirect to / */}
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
   </BrowserRouter>

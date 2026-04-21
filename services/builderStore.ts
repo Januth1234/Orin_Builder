@@ -1,82 +1,65 @@
-/**
- * services/builderStore.ts — Orin Builder
- * Zustand store driving the entire builder UI.
- * Wired to the orchestrator for streaming build state.
- */
-
 import { create } from 'zustand';
 import {
   UserAccount, BuilderProject, BuildState, BuilderTab,
-  StreamEvent, ClarificationRequest, ArtifactFile, SiteBlueprint,
+  StreamEvent, ArtifactFile,
 } from '../types';
 import { firebaseService } from './firebaseService';
 import { createOrchestrator, Orchestrator } from './orchestrator';
 import { refineHtml } from './geminiBuilderService';
 
 interface BuilderStore {
-  // ── Auth ──────────────────────────────────────────────────────────────────
   user: UserAccount | null;
   authLoading: boolean;
   setUser: (u: UserAccount | null) => void;
   setAuthLoading: (v: boolean) => void;
 
-  // ── Projects ──────────────────────────────────────────────────────────────
   projects: BuilderProject[];
   currentProject: BuilderProject | null;
   setCurrentProject: (p: BuilderProject | null) => void;
   loadProjects: () => Promise<void>;
   deleteProject: (id: string) => Promise<void>;
 
-  // ── Build state ───────────────────────────────────────────────────────────
   state: BuildState;
   progress: number;
   currentTask: string;
   events: StreamEvent[];
   error: string | null;
 
-  // ── Prompts ───────────────────────────────────────────────────────────────
   prompt: string;
   refinePrompt: string;
   setPrompt: (p: string) => void;
   setRefinePrompt: (p: string) => void;
 
-  // ── Clarification ─────────────────────────────────────────────────────────
   clarificationQuestions: string[] | null;
   clarificationAnswers: Record<string, string>;
   setClarificationAnswer: (q: string, a: string) => void;
   submitClarification: () => void;
   _clarificationResolve: ((answers: Record<string, string> | null) => void) | null;
 
-  // ── Actions ───────────────────────────────────────────────────────────────
   generate: () => Promise<void>;
   refine: () => Promise<void>;
   abort: () => void;
   newProject: () => void;
 
-  // ── UI ────────────────────────────────────────────────────────────────────
   activeTab: BuilderTab;
   sidebarOpen: boolean;
   setActiveTab: (t: BuilderTab) => void;
   setSidebarOpen: (v: boolean) => void;
 
-  // ── Internal ──────────────────────────────────────────────────────────────
   _orchestrator: Orchestrator | null;
 }
 
 let _eventLog: StreamEvent[] = [];
 
 export const useBuilderStore = create<BuilderStore>((set, get) => ({
-  // ── Auth ──────────────────────────────────────────────────────────────────
   user: null,
   authLoading: true,
   setUser: (user) => set({ user }),
   setAuthLoading: (authLoading) => set({ authLoading }),
 
-  // ── Projects ──────────────────────────────────────────────────────────────
   projects: [],
   currentProject: null,
   setCurrentProject: (currentProject) => {
-    // When switching to a historical project, sync state
     set({ currentProject, state: currentProject?.state ?? 'complete', events: currentProject?.events ?? [] });
   },
 
@@ -98,25 +81,20 @@ export const useBuilderStore = create<BuilderStore>((set, get) => ({
     });
   },
 
-  // ── Build state ───────────────────────────────────────────────────────────
   state: 'queued',
   progress: 0,
   currentTask: '',
   events: [],
   error: null,
 
-  // ── Prompts ───────────────────────────────────────────────────────────────
   prompt: '',
   refinePrompt: '',
   setPrompt: (prompt) => set({ prompt }),
   setRefinePrompt: (refinePrompt) => set({ refinePrompt }),
 
-  // ── Clarification ─────────────────────────────────────────────────────────
   clarificationQuestions: null,
   clarificationAnswers: {},
-  setClarificationAnswer: (q, a) => {
-    set(s => ({ clarificationAnswers: { ...s.clarificationAnswers, [q]: a } }));
-  },
+  setClarificationAnswer: (q, a) => set(s => ({ clarificationAnswers: { ...s.clarificationAnswers, [q]: a } })),
   submitClarification: () => {
     const { clarificationAnswers, _clarificationResolve } = get();
     _clarificationResolve?.(clarificationAnswers);
@@ -124,34 +102,26 @@ export const useBuilderStore = create<BuilderStore>((set, get) => ({
   },
   _clarificationResolve: null,
 
-  // ── Generate ─────────────────────────────────────────────────────────────
   generate: async () => {
     const { prompt, user, state } = get();
     if (!prompt.trim()) return;
-    if (!['queued','complete','failed'].includes(state) && state !== 'queued') {
-      // Already building — guard
-      if (!['complete','failed'].includes(state)) return;
-    }
+    if (!['queued', 'complete', 'failed'].includes(state)) return;
 
     _eventLog = [];
     set({
       state: 'queued', progress: 0, currentTask: '', error: null,
-      events: [], activeTab: 'preview', clarificationQuestions: null,
-      clarificationAnswers: {},
+      events: [], activeTab: 'preview', clarificationQuestions: null, clarificationAnswers: {},
     });
 
     const projectId = `proj_${Date.now()}`;
-
     const orchestrator = createOrchestrator(projectId, user, (event) => {
       _eventLog = [..._eventLog, event];
       set(s => ({
-        events: [...s.events, event],
-        state: event.state,
-        progress: event.progress ?? s.progress,
+        events:      [...s.events, event],
+        state:       event.state,
+        progress:    event.progress    ?? s.progress,
         currentTask: event.current_task ?? event.message ?? s.currentTask,
       }));
-
-      // If build complete, switch to preview tab
       if (event.type === 'build_complete' && event.state === 'complete') {
         set({ activeTab: 'preview' });
       }
@@ -164,16 +134,10 @@ export const useBuilderStore = create<BuilderStore>((set, get) => ({
         prompt,
         user,
         undefined,
-        // waitForClarification — pauses pipeline, shows UI, returns answers
-        async (questions: string[]) => {
-          return new Promise<Record<string, string> | null>((resolve) => {
-            set({
-              clarificationQuestions: questions,
-              clarificationAnswers: {},
-              _clarificationResolve: resolve,
-            });
-          });
-        },
+        async (questions: string[]) =>
+          new Promise<Record<string, string> | null>((resolve) => {
+            set({ clarificationQuestions: questions, clarificationAnswers: {}, _clarificationResolve: resolve });
+          }),
       );
 
       const now = new Date().toISOString();
@@ -181,11 +145,16 @@ export const useBuilderStore = create<BuilderStore>((set, get) => ({
         id: '',
         userId: user?.id ?? 'guest',
         prompt,
-        blueprint: result.blueprint,
-        bundle: result.bundle,
-        state: result.state ?? 'complete',
-        title: result.title ?? result.blueprint?.siteName ?? 'Untitled',
-        events: _eventLog,
+        // Store ALL plan outputs so DatabasePanel, BlueprintPanel, CodePanel have full data
+        analysis:    result.analysis,
+        blueprint:   result.blueprint,
+        backendPlan: result.backendPlan,
+        databasePlan:result.databasePlan,
+        frontendPlan:result.frontendPlan,
+        bundle:      result.bundle,
+        state:       result.state ?? 'complete',
+        title:       result.title ?? result.blueprint?.siteName ?? 'Untitled',
+        events:      _eventLog,
         clarifications: result.clarifications,
         createdAt: now,
         updatedAt: now,
@@ -200,35 +169,29 @@ export const useBuilderStore = create<BuilderStore>((set, get) => ({
 
       set({ currentProject: project, state: project.state, _orchestrator: null });
     } catch (err: any) {
-      const msg = err?.message ?? 'Generation failed';
       console.error('[store] generate:', err);
-      set({ state: 'failed', error: msg, _orchestrator: null });
+      set({ state: 'failed', error: err?.message ?? 'Generation failed', _orchestrator: null });
     }
   },
 
-  // ── Refine ────────────────────────────────────────────────────────────────
   refine: async () => {
     const { refinePrompt, currentProject, user } = get();
-    const html = currentProject?.bundle?.files.find(f => f.path === 'index.html')?.content;
+    const html = currentProject?.bundle?.files?.find(f => f.path === 'index.html')?.content;
     if (!refinePrompt.trim() || !html) return;
 
     set({ state: 'assembling_preview', currentTask: 'Applying refinement…', error: null });
 
     try {
       const refined = await refineHtml(html, refinePrompt, user, (msg) => set({ currentTask: msg }));
-
       const updatedFiles = (currentProject!.bundle!.files ?? []).map((f: ArtifactFile) =>
-        f.path === 'index.html' ? { ...f, content: refined } : f
+        f.path === 'index.html' ? { ...f, content: refined, sizeBytes: refined.length } : f
       );
-
       const updated: BuilderProject = {
         ...currentProject!,
         bundle: { ...currentProject!.bundle!, files: updatedFiles },
         updatedAt: new Date().toISOString(),
       };
-
       if (user && updated.id) await firebaseService.saveProject(updated);
-
       set({ currentProject: updated, state: 'complete', currentTask: '', refinePrompt: '' });
     } catch (err: any) {
       set({ state: 'failed', error: err?.message ?? 'Refinement failed', currentTask: '' });
@@ -250,7 +213,6 @@ export const useBuilderStore = create<BuilderStore>((set, get) => ({
     });
   },
 
-  // ── UI ────────────────────────────────────────────────────────────────────
   activeTab: 'preview',
   sidebarOpen: true,
   setActiveTab: (activeTab) => set({ activeTab }),
