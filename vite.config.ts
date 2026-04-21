@@ -30,9 +30,10 @@ export default defineConfig(({ mode }) => {
       },
     },
     define: {
-      'process.env.API_KEY':          JSON.stringify(env.API_KEY          ?? env.VITE_API_KEY),
-      'process.env.FIREBASE_API_KEY': JSON.stringify(env.FIREBASE_API_KEY ?? env.VITE_FIREBASE_API_KEY),
-      'process.env.FIREBASE_APP_ID':  JSON.stringify(env.FIREBASE_APP_ID  ?? env.VITE_FIREBASE_APP_ID),
+      'process.env.API_KEY':               JSON.stringify(env.API_KEY               ?? env.VITE_API_KEY),
+      'process.env.FIREBASE_API_KEY':      JSON.stringify(env.FIREBASE_API_KEY      ?? env.VITE_FIREBASE_API_KEY),
+      'process.env.FIREBASE_APP_ID':       JSON.stringify(env.FIREBASE_APP_ID       ?? env.VITE_FIREBASE_APP_ID),
+      'import.meta.env.VITE_GOOGLE_CLIENT_ID': JSON.stringify(env.VITE_GOOGLE_CLIENT_ID ?? ''),
       global: 'window',
     },
     server: { port: 5174 },

@@ -43,8 +43,19 @@ const FIREBASE_CONFIG = {
 // Firestore document fields that are too large to persist (strip before write)
 const STRIP_FROM_PERSISTENCE = ['bundle.files'];
 
+/** Recursively removes undefined values — Firestore rejects any undefined field. */
+function removeUndefined(obj: any): any {
+  if (obj === null || obj === undefined) return obj ?? null;
+  if (Array.isArray(obj)) return obj.map(removeUndefined).filter(v => v !== undefined);
+  if (typeof obj !== 'object') return obj;
+  return Object.fromEntries(
+    Object.entries(obj)
+      .filter(([, v]) => v !== undefined)
+      .map(([k, v]) => [k, removeUndefined(v)])
+  );
+}
+
 function stripLargeFields(project: BuilderProject): Record<string, unknown> {
-  // Store the HTML separately to avoid Firestore 1MB document limit
   const { bundle, ...rest } = project as any;
   const safeBundle = bundle ? {
     ...bundle,
@@ -52,15 +63,16 @@ function stripLargeFields(project: BuilderProject): Record<string, unknown> {
       path: f.path,
       language: f.language,
       sizeBytes: f.sizeBytes ?? f.content?.length ?? 0,
-      // Omit content — too large for Firestore. Re-fetch from storage if needed.
-      contentPreview: f.content?.slice(0, 200),
+      contentPreview: f.content?.slice(0, 200) ?? null,
     })),
-    // Keep full SQL and API markdown (small)
-    db_schema:     bundle.db_schema,
-    api_contracts: bundle.api_contracts,
-  } : undefined;
+    db_schema:     bundle.db_schema     ?? null,
+    api_contracts: bundle.api_contracts ?? [],
+    status:        bundle.status        ?? 'complete',
+    validation:    bundle.validation    ?? null,
+  } : null;
 
-  return { ...rest, bundle: safeBundle };
+  // removeUndefined prevents: "Unsupported field value: undefined"
+  return removeUndefined({ ...rest, bundle: safeBundle });
 }
 
 class FirebaseService {
@@ -148,21 +160,26 @@ class FirebaseService {
    * On first Builder login: creates a minimal account (Free tier by default).
    * On subsequent logins: refreshes name and avatar only (preserves tier/plan from main app).
    */
-  async upsertUser(fbUser: User): Promise<UserAccount> {
+  async upsertUser(fbUser: User): Promise<UserAccount & { preferences?: Record<string, any> }> {
     const ref  = doc(this.db, FIRESTORE.users, fbUser.uid);
     const snap = await getDoc(ref);
 
     if (snap.exists()) {
-      const existing = snap.data() as UserAccount;
+      const existing = snap.data() as any;
       // Non-destructive update: only refresh display fields
       await updateDoc(ref, {
         name:   fbUser.displayName ?? existing.name,
         avatar: fbUser.photoURL    ?? existing.avatar ?? null,
       });
+      // Pull preferences from main Orin AI user doc (language, theme, tone etc.)
+      const preferences = existing.preferences ?? {};
       return {
-        ...existing,
-        name:   fbUser.displayName ?? existing.name,
-        avatar: fbUser.photoURL    ?? existing.avatar,
+        ...(existing as UserAccount),
+        name:        fbUser.displayName ?? existing.name,
+        avatar:      fbUser.photoURL    ?? existing.avatar,
+        tier:        existing.tier  ?? 'Free',
+        plan:        existing.plan  ?? 'free',
+        preferences,
       };
     }
 
@@ -224,6 +241,26 @@ class FirebaseService {
 
   async deleteProject(id: string): Promise<void> {
     await deleteDoc(doc(this.db, FIRESTORE.builderProjects, id));
+  }
+
+  /** Merge arbitrary settings (preferences, theme, language) into the shared user doc. */
+  async saveUserSettings(uid: string, settings: Record<string, any>): Promise<void> {
+    const ref = doc(this.db, FIRESTORE.users, uid);
+    const flat: Record<string, any> = {};
+    function flatten(obj: Record<string, any>, prefix = '') {
+      for (const [k, v] of Object.entries(obj)) {
+        const key = prefix ? `${prefix}.${k}` : k;
+        if (v !== null && v !== undefined && typeof v === 'object' && !Array.isArray(v)) {
+          flatten(v, key);
+        } else if (v !== undefined) {
+          flat[key] = v;
+        }
+      }
+    }
+    flatten(settings);
+    if (Object.keys(flat).length > 0) {
+      try { await updateDoc(ref, flat); } catch { /* non-fatal */ }
+    }
   }
 }
 

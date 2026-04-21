@@ -46,6 +46,7 @@ interface BuilderStore {
   setActiveTab: (t: BuilderTab) => void;
   setSidebarOpen: (v: boolean) => void;
 
+  preferences: Record<string, any>;
   _orchestrator: Orchestrator | null;
 }
 
@@ -54,6 +55,7 @@ let _eventLog: StreamEvent[] = [];
 export const useBuilderStore = create<BuilderStore>((set, get) => ({
   user: null,
   authLoading: true,
+  preferences: {} as Record<string, any>,
   setUser: (user) => set({ user }),
   setAuthLoading: (authLoading) => set({ authLoading }),
 

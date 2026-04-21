@@ -153,19 +153,26 @@ const BuilderApp: React.FC = () => {
             </button>
           )}
 
-          <a
-            href={APP_CONFIG.mainAppUrl}
-            target="_blank"
-            rel="noreferrer"
-            className="flex flex-shrink-0 items-center gap-1.5"
+          <button
+            onClick={async () => {
+              try {
+                const { getAuth } = await import('firebase/auth');
+                const tok = await getAuth().currentUser?.getIdToken();
+                const url = tok ? `${APP_CONFIG.mainAppUrl}?ot=${tok}` : APP_CONFIG.mainAppUrl;
+                window.open(url, '_blank', 'noopener,noreferrer');
+              } catch { window.open(APP_CONFIG.mainAppUrl, '_blank', 'noopener,noreferrer'); }
+            }}
+            className="flex flex-shrink-0 items-center gap-1.5 group"
+            title="Back to Orin AI"
           >
+            <span className="text-[10px] text-b-muted group-hover:text-b-accent transition-colors">←</span>
             <span className="text-sm font-bold">
               <span className="text-b-accent">Orin</span>
               <span className="text-b-blue">AI</span>
             </span>
             <ChevronRight size={11} className="text-b-dim" />
             <span className="text-sm font-semibold text-white">Builder</span>
-          </a>
+          </button>
 
           <div className="order-3 flex w-full min-w-0 flex-1 items-center gap-2 rounded-xl border border-b-border bg-b-elev px-3 py-1.5 focus-within:border-b-accent/55 sm:order-none">
             <Sparkles size={14} className="hidden flex-shrink-0 text-b-accent sm:block" />
@@ -354,6 +361,36 @@ const BuilderApp: React.FC = () => {
             </button>
           </div>
         )}
+      {/* Ecosystem bar — always visible, links builder ↔ orinai.org */}
+      <div className="flex items-center justify-between gap-3 border-t border-b-border/50 bg-b-bg px-4 py-1.5 z-10 relative">
+        <div className="flex items-center gap-2 text-[10px] text-b-dim">
+          <span className="text-b-accent font-bold">Orin</span>
+          <span className="text-b-blue font-bold">AI</span>
+          <span className="opacity-30">›</span>
+          <span className="text-b-muted font-semibold">Builder</span>
+          {user && (
+            <>
+              <span className="opacity-20 mx-1">·</span>
+              <span className="truncate max-w-[140px]">{user.name}</span>
+              <span className="px-1.5 py-0.5 rounded-full bg-b-accent/10 text-b-accent border border-b-accent/20 text-[9px] font-bold uppercase tracking-wider ml-1">
+                {(user as any).tier ?? 'Free'}
+              </span>
+            </>
+          )}
+        </div>
+        <button
+          onClick={async () => {
+            try {
+              const { getAuth } = await import('firebase/auth');
+              const tok = await getAuth().currentUser?.getIdToken();
+              const url = tok ? `https://www.orinai.org?ot=${tok}` : 'https://www.orinai.org';
+              window.open(url, '_blank', 'noopener,noreferrer');
+            } catch { window.open('https://www.orinai.org', '_blank', 'noopener,noreferrer'); }
+          }}
+          className="text-[10px] text-b-dim hover:text-b-accent transition-colors font-medium flex items-center gap-1 shrink-0"
+        >
+          Open Orin AI <span className="text-[9px]">↗</span>
+        </button>
       </div>
     </div>
   );

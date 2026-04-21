@@ -22,8 +22,22 @@ const AuthGate: React.FC<{ children: React.ReactNode }> = ({ children }) => {
           id: fbUser.uid, name: fbUser.displayName ?? 'User',
           email: fbUser.email ?? '', avatar: fbUser.photoURL ?? undefined,
           tier: 'Free' as const, dailyUsage: { text:0, images:0, videos:0 },
-        }));
+        })) as any;
         setUser(account);
+        // Apply preferences inherited from main Orin AI app
+        if (account.preferences) {
+          const p = account.preferences;
+          // Language: stored as 'sinhala'|'tamil'|'english' in main app
+          if (p.language && typeof p.language === 'string') {
+            document.documentElement.setAttribute('data-lang', p.language);
+          }
+          // Theme: main app uses 'dark'|'light'|'auto'
+          const theme = p.theme ?? p.colorTheme ?? 'dark';
+          document.documentElement.classList.remove('light', 'dark');
+          document.documentElement.classList.add(theme === 'light' ? 'light' : 'dark');
+        }
+        // Mark window so main app can detect builder is loaded
+        (window as any).__orinUser = { id: fbUser.uid, name: fbUser.displayName };
       } else {
         setUser(null);
       }
@@ -70,21 +84,50 @@ const Spinner = () => (
 );
 
 const LoginScreen: React.FC<{ onLogin: () => void; error: string | null }> = ({ onLogin, error }) => (
-  <div className="flex h-screen w-screen flex-col items-center justify-center bg-b-bg gap-10 p-6">
-    <div className="flex flex-col items-center gap-3 text-center">
-      <BuilderIcon size={48} />
-      <div className="text-2xl font-bold tracking-tight">
-        <span className="text-b-accent">Orin</span><span className="text-b-blue">AI</span>
-        <span className="ml-2 text-lg font-normal text-b-muted">Builder</span>
-      </div>
-      <p className="text-xs text-b-dim max-w-xs">{APP_CONFIG.sloganEn}</p>
+  <div className="relative flex h-screen w-screen flex-col items-center justify-center bg-b-bg gap-8 p-6 overflow-hidden">
+    {/* Ambient orbs matching orinai.org */}
+    <div className="pointer-events-none absolute inset-0">
+      <div className="absolute -top-32 -left-32 w-[500px] h-[500px] rounded-full bg-b-accent/8 blur-[100px]" />
+      <div className="absolute -bottom-32 -right-32 w-[400px] h-[400px] rounded-full bg-b-blue/8 blur-[100px]" />
     </div>
 
-    <div className="w-full max-w-[360px] rounded-2xl border border-b-border bg-b-surf p-8 flex flex-col gap-5">
+    {/* Ecosystem breadcrumb */}
+    <div className="relative flex items-center gap-2 text-[11px] text-b-dim">
+      <a href={APP_CONFIG.mainAppUrl} className="hover:text-b-accent transition-colors font-medium">
+        <span className="text-b-accent">Orin</span><span className="text-b-blue">AI</span>
+      </a>
+      <span>›</span>
+      <span className="text-b-muted font-semibold">Builder</span>
+    </div>
+
+    {/* Logo + title */}
+    <div className="relative flex flex-col items-center gap-4 text-center">
+      <div className="relative">
+        <div className="absolute inset-0 rounded-2xl bg-b-accent/20 blur-xl scale-150" />
+        <BuilderIcon size={56} />
+      </div>
       <div>
-        <h1 className="text-base font-semibold text-white mb-1">Sign in to Orin Builder</h1>
-        <p className="text-xs text-b-muted leading-relaxed">
-          Already have an Orin AI account? Use the same Google account — you'll be signed in instantly.
+        <h1 className="text-3xl font-black tracking-tight">
+          <span className="text-b-accent">Orin</span><span className="text-b-blue">AI</span>
+          <span className="text-white ml-2">Builder</span>
+        </h1>
+        <p className="text-sm text-b-muted mt-1 max-w-xs leading-relaxed">
+          AI website generator — describe it, get the full stack.
+        </p>
+      </div>
+    </div>
+
+    {/* Card */}
+    <div className="relative w-full max-w-[380px] rounded-2xl border border-b-border bg-b-surf/80 backdrop-blur p-7 flex flex-col gap-4 shadow-2xl shadow-black/40">
+      <div className="flex items-start gap-3 p-3 rounded-xl bg-b-accent/8 border border-b-accent/20">
+        <div className="w-7 h-7 rounded-lg bg-b-accent/20 flex items-center justify-center flex-shrink-0 mt-0.5">
+          <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+            <path d="M7 1l1.5 4.5H13l-3.75 2.75 1.5 4.5L7 10l-3.75 2.75 1.5-4.5L1 5.5h4.5L7 1z" fill="#22c892"/>
+          </svg>
+        </div>
+        <p className="text-[11px] text-b-muted leading-relaxed">
+          <span className="text-b-accent font-semibold">Same account as Orin AI.</span>{' '}
+          Sign in with the same Google account — your plan, preferences, and history carry over automatically.
         </p>
       </div>
 
@@ -96,22 +139,22 @@ const LoginScreen: React.FC<{ onLogin: () => void; error: string | null }> = ({ 
 
       <button
         onClick={onLogin}
-        className="flex items-center justify-center gap-2.5 w-full rounded-xl py-2.5 px-4 bg-white text-gray-900 text-sm font-medium hover:bg-gray-100 active:scale-[0.98] transition-all duration-150 tap-target"
+        className="flex items-center justify-center gap-2.5 w-full rounded-xl py-3 px-4 bg-white text-gray-900 text-sm font-semibold hover:bg-gray-50 active:scale-[0.98] transition-all duration-150 shadow-lg shadow-black/20"
       >
         <GoogleSvg />
         Continue with Google
       </button>
 
-      <p className="text-center text-[11px] text-b-dim">
+      <p className="text-center text-[10px] text-b-dim leading-relaxed">
         By signing in you agree to Orin AI's{' '}
         <a href={`${APP_CONFIG.mainAppUrl}/#terms`} target="_blank" rel="noreferrer" className="text-b-blue hover:underline underline-offset-2">Terms</a>
-        {' '}&amp;{' '}
+        {' '}&{' '}
         <a href={`${APP_CONFIG.mainAppUrl}/#privacy`} target="_blank" rel="noreferrer" className="text-b-blue hover:underline underline-offset-2">Privacy</a>
       </p>
     </div>
 
-    <a href={APP_CONFIG.mainAppUrl} className="text-[11px] text-b-dim hover:text-b-muted transition-colors">
-      ← Back to Orin AI
+    <a href={APP_CONFIG.mainAppUrl} className="relative text-[11px] text-b-dim hover:text-b-muted transition-colors flex items-center gap-1.5">
+      <span>←</span> Back to Orin AI
     </a>
   </div>
 );
