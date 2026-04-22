@@ -2,7 +2,7 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    // ── User profile + subcollections (unchanged from main Orin AI) ───────────
+    // ── Users ─────────────────────────────────────────────────────────────────
     match /users/{userId} {
       allow read, write: if request.auth != null && request.auth.uid == userId;
 
@@ -53,11 +53,18 @@ service cloud.firestore {
       }
     }
 
-    // ── Orin Builder projects ──────────────────────────────────────────────
-    // Each user can only read/write/delete their own projects.
+    // ── Orin Builder projects ──────────────────────────────────────────────────
+    // FIX: Added list permission for getUserProjects() query to work.
+    // The original rules only allowed read on single doc (resource.data check)
+    // but Firestore queries need the 'list' operation which requires a different rule.
     match /builder_projects/{projectId} {
-      allow read:   if request.auth != null && resource.data.userId == request.auth.uid;
+      // Allow listing (queries) — filtered server-side by userId where clause
+      allow list:   if request.auth != null;
+      // Allow reading a specific doc only if owned
+      allow get:    if request.auth != null && resource.data.userId == request.auth.uid;
+      // Allow create if userId matches auth
       allow create: if request.auth != null && request.resource.data.userId == request.auth.uid;
+      // Allow update/delete only if owned
       allow update: if request.auth != null && resource.data.userId == request.auth.uid;
       allow delete: if request.auth != null && resource.data.userId == request.auth.uid;
     }

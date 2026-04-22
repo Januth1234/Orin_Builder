@@ -6,6 +6,8 @@ import {
 import { firebaseService } from './firebaseService';
 import { createOrchestrator, Orchestrator } from './orchestrator';
 import { refineHtml } from './geminiBuilderService';
+import { buildCache } from './buildCache';
+import type { ContentMode, ContentUpload, SiteTemplate } from '../types';
 
 interface BuilderStore {
   user: UserAccount | null;
@@ -48,6 +50,18 @@ interface BuilderStore {
 
   preferences: Record<string, any>;
   _orchestrator: Orchestrator | null;
+
+  // ── Content mode ─────────────────────────────────────────────────────────
+  contentMode: ContentMode | null;
+  contentUpload: ContentUpload | null;
+  showContentModal: boolean;
+  showTemplateGallery: boolean;
+  setContentMode: (m: ContentMode | null) => void;
+  setContentUpload: (u: ContentUpload | null) => void;
+  setShowContentModal: (v: boolean) => void;
+  setShowTemplateGallery: (v: boolean) => void;
+  applyTemplate: (t: SiteTemplate) => void;
+  startGenerateWithContent: (mode: ContentMode, upload?: ContentUpload) => Promise<void>;
 }
 
 let _eventLog: StreamEvent[] = [];
@@ -70,12 +84,15 @@ export const useBuilderStore = create<BuilderStore>((set, get) => ({
     if (!user) return;
     try {
       const projects = await firebaseService.getUserProjects(user.id);
-      set({ projects });
+      // Hydrate projects with cached HTML content
+      const hydrated = await Promise.all(projects.map(p => buildCache.hydrate(p).catch(() => p)));
+      set({ projects: hydrated });
     } catch (e) { console.error('[store] loadProjects:', e); }
   },
 
   deleteProject: async (id) => {
     await firebaseService.deleteProject(id);
+    await buildCache.delete(id).catch(() => {});
     const { projects, currentProject } = get();
     set({
       projects: projects.filter(p => p.id !== id),
@@ -132,6 +149,7 @@ export const useBuilderStore = create<BuilderStore>((set, get) => ({
     set({ _orchestrator: orchestrator });
 
     try {
+      const { contentUpload: cu } = get();
       const result = await orchestrator.run(
         prompt,
         user,
@@ -140,6 +158,7 @@ export const useBuilderStore = create<BuilderStore>((set, get) => ({
           new Promise<Record<string, string> | null>((resolve) => {
             set({ clarificationQuestions: questions, clarificationAnswers: {}, _clarificationResolve: resolve });
           }),
+        cu ?? undefined,
       );
 
       const now = new Date().toISOString();
@@ -170,6 +189,10 @@ export const useBuilderStore = create<BuilderStore>((set, get) => ({
       if (user) {
         const savedId = await firebaseService.saveProject(project);
         project.id = savedId;
+        // Cache heavy content locally for instant revisit
+        if (project.bundle?.files?.length) {
+          await buildCache.set(project).catch(() => {});
+        }
         await get().loadProjects();
       }
 
@@ -212,8 +235,8 @@ export const useBuilderStore = create<BuilderStore>((set, get) => ({
   newProject: () => {
     get()._orchestrator?.abort();
     set({
-      state: 'queued', progress: 0, currentTask: '', error: null,
-      prompt: '', refinePrompt: '', currentProject: null,
+      state: 'queued', progress: 0, currentTask: '', error: null, contentMode: null, contentUpload: null,
+      prompt: '', refinePrompt: '', currentProject: null, showContentModal: false,
       events: [], clarificationQuestions: null, clarificationAnswers: {},
       activeTab: 'preview', _orchestrator: null,
     });
@@ -224,4 +247,19 @@ export const useBuilderStore = create<BuilderStore>((set, get) => ({
   setActiveTab: (activeTab) => set({ activeTab }),
   setSidebarOpen: (sidebarOpen) => set({ sidebarOpen }),
   _orchestrator: null,
+
+  // ── Content mode defaults ─────────────────────────────────────────────────
+  contentMode: null,
+  contentUpload: null,
+  showContentModal: false,
+  showTemplateGallery: false,
+  setContentMode: (contentMode) => set({ contentMode }),
+  setContentUpload: (contentUpload) => set({ contentUpload }),
+  setShowContentModal: (showContentModal) => set({ showContentModal }),
+  setShowTemplateGallery: (showTemplateGallery) => set({ showTemplateGallery }),
+  applyTemplate: (template) => set({ prompt: template.prompt, showTemplateGallery: false }),
+  startGenerateWithContent: async (mode, upload) => {
+    set({ contentMode: mode, contentUpload: upload ?? null, showContentModal: false });
+    await get().generate();
+  },
 }));

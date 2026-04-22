@@ -371,6 +371,11 @@ Return ONLY valid JSON, no markdown:
       const componentList = frontendPlan?.components?.map(c => c.name).join(', ')
         ?? bp?.components?.join(', ') ?? '';
 
+      // Build content override string from user uploads
+      const cu = (args._contentUpload as Record<string,any> | undefined);
+      const contentContext = cu && Object.keys(cu).length > 0
+        ? `\n\nCONTENT PROVIDED BY USER (use these EXACTLY — do NOT invent alternatives):\n${JSON.stringify(cu, null, 2)}`
+        : '';
       const htmlPrompt = `
 You are a senior frontend engineer. Generate a COMPLETE, production-quality website as ONE self-contained HTML file.
 
@@ -410,7 +415,7 @@ HARD REQUIREMENTS — ALL must be satisfied:
 11. MINIMUM 600 lines. Match tone precisely: ${bp?.tone}. Professional output only.
 12. No external CSS frameworks. No jQuery. Pure CSS and vanilla JS only.
 
-Return ONLY the raw HTML starting with <!DOCTYPE html>. No markdown. No backticks. No commentary before or after.`.trim();
+Return ONLY the raw HTML starting with <!DOCTYPE html>. No markdown. No backticks. No commentary before or after.${contentContext}`.trim();
 
       const rawHtml = await askGemini(model, htmlPrompt, 16384, signal);
       const html    = patchHtml(rawHtml, bp?.siteName ?? 'Website');
@@ -549,7 +554,7 @@ const FATAL_TOOLS = new Set<ToolName>(['analyze_prompt','create_blueprint','asse
 // ── Context injection (fills dependent tool args from prior results) ──────────
 function injectContext(
   name: ToolName, args: Record<string, unknown>,
-  ctx: { analysis?: any; blueprint?: any; backendPlan?: any; databasePlan?: any; frontendPlan?: any },
+  ctx: { analysis?: any; blueprint?: any; backendPlan?: any; databasePlan?: any; frontendPlan?: any; contentUpload?: any },
 ): Record<string, unknown> {
   const out = { ...args };
   if (name === 'create_blueprint' && ctx.analysis) {
@@ -562,10 +567,11 @@ function injectContext(
     out.blueprint = ctx.blueprint;
   }
   if (name === 'assemble_artifacts') {
-    if (ctx.blueprint)    out.blueprint     = ctx.blueprint;
-    if (ctx.backendPlan)  out.backend_plan  ??= ctx.backendPlan;
-    if (ctx.frontendPlan) out.frontend_plan ??= ctx.frontendPlan;
-    if (ctx.databasePlan) out.database_plan ??= ctx.databasePlan;
+    if (ctx.blueprint)      out.blueprint       = ctx.blueprint;
+    if (ctx.backendPlan)    out.backend_plan    ??= ctx.backendPlan;
+    if (ctx.frontendPlan)   out.frontend_plan   ??= ctx.frontendPlan;
+    if (ctx.databasePlan)   out.database_plan   ??= ctx.databasePlan;
+    if (ctx.contentUpload)  out._contentUpload  = ctx.contentUpload;
   }
   return out;
 }
@@ -627,6 +633,7 @@ export class Orchestrator {
     user: UserAccount | null,
     existingClarifications?: Record<string, string>,
     waitForClarification?: (qs: string[]) => Promise<Record<string, string> | null>,
+    contentUpload?: Record<string, any> | undefined,
   ) {
     const { signal } = this;
     let analysis: any, blueprint: any, backendPlan: any, databasePlan: any, frontendPlan: any;
@@ -715,7 +722,7 @@ ${existingClarifications ? `ANSWERS ALREADY PROVIDED: ${JSON.stringify(existingC
       for (const fc of fcs) {
         if (signal.aborted) break;
         const toolName = fc.name as ToolName;
-        const args = injectContext(toolName, fc.args ?? {}, { analysis, blueprint, backendPlan, databasePlan, frontendPlan });
+        const args = injectContext(toolName, fc.args ?? {}, { analysis, blueprint, backendPlan, databasePlan, frontendPlan, contentUpload });
         const newState: BuildState = TOOL_TO_STATE[toolName] ?? state;
 
         if (newState !== state) { this.transition(newState, state, { tool_name: toolName, tool_call_id: fc.id }); state = newState; }

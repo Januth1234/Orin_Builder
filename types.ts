@@ -154,6 +154,32 @@ export interface ArtifactBundle {
 export interface ClarificationRequest  { questions: string[] }
 export interface ClarificationResponse { answers: Record<string, string> }
 
+
+// ── Content generation mode ───────────────────────────────────────────────────
+export type ContentMode = 'ai' | 'upload';
+
+export interface ContentUpload {
+  heroHeadline?: string;
+  heroSubtext?: string;
+  aboutText?: string;
+  features?: { title: string; description: string }[];
+  ctaText?: string;
+  companyName?: string;
+  tagline?: string;
+}
+
+// ── Site templates ────────────────────────────────────────────────────────────
+export interface SiteTemplate {
+  id: string;
+  name: string;
+  description: string;
+  category: 'saas' | 'portfolio' | 'ecommerce' | 'agency' | 'startup' | 'blog';
+  accentColor: string;
+  bgColor: string;
+  prompt: string;
+  tags: string[];
+}
+
 export interface BuilderProject {
   id: string; userId: string; prompt: string;
   analysis?:      PromptAnalysis;
@@ -171,6 +197,8 @@ export interface BuilderProject {
   createdAt:      string;
   updatedAt:      string;
   isPublished:    boolean;
+  contentMode?:   ContentMode;
+  contentUpload?: ContentUpload;
 }
 
 export interface PipelineStep {

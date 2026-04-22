@@ -19,6 +19,8 @@ import { firebaseService } from '../services/firebaseService';
 import { BuilderTab, BUILD_STATE_META } from '../types';
 import { APP_CONFIG } from '../config';
 import BuilderSidebar from './BuilderSidebar';
+import ContentModeModal from './ContentModeModal';
+import TemplateGallery from './TemplateGallery';
 
 const PreviewPanel = lazy(() => import('./panels/PreviewPanel'));
 const CodePanel = lazy(() => import('./panels/CodePanel'));
@@ -55,6 +57,12 @@ const BuilderApp: React.FC = () => {
     clarificationAnswers,
     setClarificationAnswer,
     submitClarification,
+    showContentModal,
+    setShowContentModal,
+    showTemplateGallery,
+    setShowTemplateGallery,
+    startGenerateWithContent,
+    applyTemplate,
   } = useBuilderStore();
 
   const promptRef = useRef<HTMLInputElement>(null);
@@ -113,7 +121,7 @@ const BuilderApp: React.FC = () => {
   }, [generate, hasResult, isBuilding, newProject, prompt, refine, refinePrompt]);
 
   const runGenerate = () => {
-    if (!isBuilding && prompt.trim()) void generate();
+    if (!isBuilding && prompt.trim()) setShowContentModal(true);
   };
 
   const runRefine = () => {
@@ -194,6 +202,15 @@ const BuilderApp: React.FC = () => {
               </div>
             )}
           </div>
+
+          <button
+            onClick={() => setShowTemplateGallery(true)}
+            disabled={isBuilding}
+            className="hidden flex-shrink-0 items-center gap-1.5 rounded-xl border border-b-border bg-b-elev px-3 py-1.5 text-xs font-medium text-b-muted transition-colors hover:border-b-muted hover:text-white disabled:opacity-30 sm:flex"
+            title="Browse templates"
+          >
+            Templates
+          </button>
 
           {!hasResult ? (
             <button
@@ -393,6 +410,23 @@ const BuilderApp: React.FC = () => {
         </button>
       </div>
     </div>
+
+      {/* Content mode modal */}
+      {showContentModal && (
+        <ContentModeModal
+          prompt={prompt}
+          onConfirm={(mode, upload) => void startGenerateWithContent(mode, upload)}
+          onCancel={() => setShowContentModal(false)}
+        />
+      )}
+
+      {/* Template gallery */}
+      {showTemplateGallery && (
+        <TemplateGallery
+          onSelect={applyTemplate}
+          onClose={() => setShowTemplateGallery(false)}
+        />
+      )}
   </div>
   );
 };
