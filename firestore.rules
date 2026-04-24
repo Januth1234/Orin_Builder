@@ -10,12 +10,8 @@ service cloud.firestore {
         allow read, delete: if request.auth != null && request.auth.uid == userId;
         allow create, update: if false;
       }
-      match /google_tokens/{module} {
-        allow read, write: if false;
-      }
-      match /integrations/{integration} {
-        allow read, write: if false;
-      }
+      match /google_tokens/{module} { allow read, write: if false; }
+      match /integrations/{integration} { allow read, write: if false; }
     }
 
     match /conversations/{userId}/{document=**} {
@@ -54,19 +50,16 @@ service cloud.firestore {
     }
 
     // ── Orin Builder projects ──────────────────────────────────────────────────
-    // FIX: Added list permission for getUserProjects() query to work.
-    // The original rules only allowed read on single doc (resource.data check)
-    // but Firestore queries need the 'list' operation which requires a different rule.
     match /builder_projects/{projectId} {
-      // Allow listing (queries) — filtered server-side by userId where clause
-      allow list:   if request.auth != null;
-      // Allow reading a specific doc only if owned
-      allow get:    if request.auth != null && resource.data.userId == request.auth.uid;
-      // Allow create if userId matches auth
-      allow create: if request.auth != null && request.resource.data.userId == request.auth.uid;
-      // Allow update/delete only if owned
-      allow update: if request.auth != null && resource.data.userId == request.auth.uid;
-      allow delete: if request.auth != null && resource.data.userId == request.auth.uid;
+      // 'read' covers both get (single doc) and list (queries)
+      allow read:   if request.auth != null
+                    && (resource == null || resource.data.userId == request.auth.uid);
+      allow create: if request.auth != null
+                    && request.resource.data.userId == request.auth.uid;
+      allow update: if request.auth != null
+                    && resource.data.userId == request.auth.uid;
+      allow delete: if request.auth != null
+                    && resource.data.userId == request.auth.uid;
     }
   }
 }

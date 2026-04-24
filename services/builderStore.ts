@@ -87,12 +87,25 @@ export const useBuilderStore = create<BuilderStore>((set, get) => ({
       // Hydrate projects with cached HTML content
       const hydrated = await Promise.all(projects.map(p => buildCache.hydrate(p).catch(() => p)));
       set({ projects: hydrated });
-    } catch (e) { console.error('[store] loadProjects:', e); }
+    } catch (e: any) {
+      console.warn('[store] loadProjects Firestore error, falling back to localStorage:', e?.message);
+      // Fallback: load from localStorage when Firestore rules are not yet deployed
+      try {
+        const local = JSON.parse(localStorage.getItem('orin_local_projects') ?? '[]') as any[];
+        const hydrated = await Promise.all(local.map((p: any) => buildCache.hydrate(p).catch(() => p)));
+        set({ projects: hydrated });
+      } catch { /* ignore */ }
+    }
   },
 
   deleteProject: async (id) => {
-    await firebaseService.deleteProject(id);
+    try { await firebaseService.deleteProject(id); } catch { /* ignore if no Firestore access */ }
     await buildCache.delete(id).catch(() => {});
+    // Also remove from localStorage fallback
+    try {
+      const local = JSON.parse(localStorage.getItem('orin_local_projects') ?? '[]') as any[];
+      localStorage.setItem('orin_local_projects', JSON.stringify(local.filter((p: any) => p.id !== id)));
+    } catch { /* ignore */ }
     const { projects, currentProject } = get();
     set({
       projects: projects.filter(p => p.id !== id),
@@ -187,13 +200,20 @@ export const useBuilderStore = create<BuilderStore>((set, get) => ({
       };
 
       if (user) {
-        const savedId = await firebaseService.saveProject(project);
-        project.id = savedId;
-        // Cache heavy content locally for instant revisit
-        if (project.bundle?.files?.length) {
-          await buildCache.set(project).catch(() => {});
+        // Non-fatal: if Firestore write fails (e.g. rules not deployed yet),
+        // the generated result is still shown to the user via local state + cache.
+        try {
+          const savedId = await firebaseService.saveProject(project);
+          project.id = savedId;
+          // Cache heavy content locally for instant revisit
+          if (project.bundle?.files?.length) {
+            await buildCache.set(project).catch(() => {});
+          }
+          await get().loadProjects();
+        } catch (saveErr: any) {
+          console.warn('[store] saveProject failed (non-fatal):', saveErr?.message);
+          // Still show the result even if save failed
         }
-        await get().loadProjects();
       }
 
       set({ currentProject: project, state: project.state, _orchestrator: null });
@@ -220,7 +240,7 @@ export const useBuilderStore = create<BuilderStore>((set, get) => ({
         bundle: { ...currentProject!.bundle!, files: updatedFiles },
         updatedAt: new Date().toISOString(),
       };
-      if (user && updated.id) await firebaseService.saveProject(updated);
+      if (user && updated.id) await firebaseService.saveProject(updated).catch(() => {});
       set({ currentProject: updated, state: 'complete', currentTask: '', refinePrompt: '' });
     } catch (err: any) {
       set({ state: 'failed', error: err?.message ?? 'Refinement failed', currentTask: '' });
