@@ -7,7 +7,7 @@ import { useBuilderStore } from './services/builderStore';
 
 const WorkspaceRoute: React.FC = () => {
   const { user, loadProjects } = useBuilderStore();
-  useEffect(() => { if (user) loadProjects(); }, [user?.id]);
+  useEffect(() => { if (user) loadProjects().catch(() => {}); }, [user?.id]);
   return (
     <AuthGate>
       <BuilderApp />

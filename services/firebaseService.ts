@@ -113,7 +113,7 @@ class FirebaseService {
     }
   }
 
-  async logout(): Promise<void> { await signOut(this.auth); }
+  async logout(): Promise<void> { await signOut(this.auth).catch(() => {}); }
 
   getCurrentUser(): User | null { return this.auth.currentUser; }
 
@@ -161,30 +161,7 @@ class FirebaseService {
    * On subsequent logins: refreshes name and avatar only (preserves tier/plan from main app).
    */
   async upsertUser(fbUser: User): Promise<UserAccount & { preferences?: Record<string, any> }> {
-    const ref  = doc(this.db, FIRESTORE.users, fbUser.uid);
-    const snap = await getDoc(ref);
-
-    if (snap.exists()) {
-      const existing = snap.data() as any;
-      // Non-destructive update: only refresh display fields
-      await updateDoc(ref, {
-        name:   fbUser.displayName ?? existing.name,
-        avatar: fbUser.photoURL    ?? existing.avatar ?? null,
-      });
-      // Pull preferences from main Orin AI user doc (language, theme, tone etc.)
-      const preferences = existing.preferences ?? {};
-      return {
-        ...(existing as UserAccount),
-        name:        fbUser.displayName ?? existing.name,
-        avatar:      fbUser.photoURL    ?? existing.avatar,
-        tier:        existing.tier  ?? 'Free',
-        plan:        existing.plan  ?? 'free',
-        preferences,
-      };
-    }
-
-    // First sign-in on Builder — create minimal account
-    const account: UserAccount = {
+    const fallback: UserAccount = {
       id:         fbUser.uid,
       name:       fbUser.displayName ?? 'User',
       email:      fbUser.email       ?? '',
@@ -193,8 +170,30 @@ class FirebaseService {
       plan:       'free',
       dailyUsage: { text: 0, images: 0, videos: 0 },
     };
-    await setDoc(ref, { ...account, createdAt: serverTimestamp(), source: 'builder' });
-    return account;
+    try {
+      const ref  = doc(this.db, FIRESTORE.users, fbUser.uid);
+      const snap = await getDoc(ref);
+      if (snap.exists()) {
+        const existing = snap.data() as any;
+        await updateDoc(ref, {
+          name:   fbUser.displayName ?? existing.name,
+          avatar: fbUser.photoURL    ?? existing.avatar ?? null,
+        }).catch(() => {});
+        const preferences = existing.preferences ?? {};
+        return {
+          ...(existing as UserAccount),
+          name:        fbUser.displayName ?? existing.name,
+          avatar:      fbUser.photoURL    ?? existing.avatar,
+          tier:        existing.tier  ?? 'Free',
+          plan:        existing.plan  ?? 'free',
+          preferences,
+        };
+      }
+      await setDoc(ref, { ...fallback, createdAt: serverTimestamp(), source: 'builder' }).catch(() => {});
+      return fallback;
+    } catch {
+      return fallback;
+    }
   }
 
   // ── Builder Projects ──────────────────────────────────────────────────────
