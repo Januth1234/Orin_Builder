@@ -209,7 +209,7 @@ export const useBuilderStore = create<BuilderStore>((set, get) => ({
           if (project.bundle?.files?.length) {
             await buildCache.set(project).catch(() => {});
           }
-          await get().loadProjects();
+          await get().loadProjects().catch(() => {});
         } catch (saveErr: any) {
           console.warn('[store] saveProject failed (non-fatal):', saveErr?.message);
           // Still show the result even if save failed
