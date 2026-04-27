@@ -549,7 +549,7 @@ const TOOL_TO_STATE: Record<string, BuildState> = {
   validate_bundle:        'validating',
 };
 
-const FATAL_TOOLS = new Set<ToolName>(['analyze_prompt','create_blueprint','assemble_artifacts']);
+const FATAL_TOOLS = new Set<ToolName>(['analyze_prompt','create_blueprint']);
 
 // ── Context injection (fills dependent tool args from prior results) ──────────
 function injectContext(
@@ -782,10 +782,27 @@ ${existingClarifications ? `ANSWERS ALREADY PROVIDED: ${JSON.stringify(existingC
         if (toolName === 'generate_backend_plan')   backendPlan  = result;
         if (toolName === 'generate_database_plan')  databasePlan = result;
         if (toolName === 'generate_frontend_plan')  frontendPlan = result;
+        // If frontend plan failed non-fatally, inject fallback so assemble_artifacts can proceed
+        if (toolName === 'generate_frontend_plan' && !frontendPlan && blueprint) {
+          frontendPlan = {
+            frontend_tasks: ['Build responsive layout','Add animations'],
+            components: (blueprint as any).sections?.map((s: any) => ({
+              name: s.name, type: 'section', description: s.purpose, hasAnimation: s.hasAnimation ?? false,
+            })) ?? [],
+            layout_strategy: 'CSS Grid + Flexbox',
+            animation_strategy: 'IntersectionObserver scroll fade-in',
+            responsive_breakpoints: ['640px','768px','1024px','1280px'],
+          };
+        }
         if (toolName === 'assemble_artifacts') {
-          bundle = result as ArtifactBundle;
-          const htmlSize = bundle.files.find(f => f.path === 'index.html')?.sizeBytes ?? 0;
-          this.emit('artifact_created', state, { artifact_path: 'index.html', message: `HTML assembled (${Math.round(htmlSize/1024)}KB)` });
+          if (result && (result as any).files?.length) {
+            bundle = result as ArtifactBundle;
+            const htmlSize = bundle.files.find(f => f.path === 'index.html')?.sizeBytes ?? 0;
+            this.emit('artifact_created', state, { artifact_path: 'index.html', message: `HTML assembled (${Math.round(htmlSize/1024)}KB)` });
+          } else {
+            this.emit('validation_warning', state, { message: 'assemble_artifacts returned empty — retrying inline' });
+            // Force retry by not setting bundle — pipeline will hit post-loop validation
+          }
         }
         if (toolName === 'validate_bundle' && bundle) {
           const v = result as ValidationResult;
