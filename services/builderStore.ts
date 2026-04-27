@@ -277,7 +277,7 @@ export const useBuilderStore = create<BuilderStore>((set, get) => ({
   setContentUpload: (contentUpload) => set({ contentUpload }),
   setShowContentModal: (showContentModal) => set({ showContentModal }),
   setShowTemplateGallery: (showTemplateGallery) => set({ showTemplateGallery }),
-  applyTemplate: (template) => set({ prompt: template.prompt, showTemplateGallery: false }),
+  applyTemplate: (template) => set({ prompt: template.prompt, showTemplateGallery: false, showContentModal: true }),
   startGenerateWithContent: async (mode, upload) => {
     set({ contentMode: mode, contentUpload: upload ?? null, showContentModal: false });
     await get().generate();

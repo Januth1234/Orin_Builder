@@ -654,7 +654,7 @@ You are the OrinAI Builder orchestrator. Build a website by calling tools in thi
 8. validate_bundle (always last)
 
 Rules: ONE tool at a time. Pass prior results into later tools. Do NOT repeat any tool.
-USER PROMPT: "${prompt.slice(0, 1000)}"
+USER PROMPT: "${prompt.slice(0, 3000)}"
 ${existingClarifications ? `ANSWERS ALREADY PROVIDED: ${JSON.stringify(existingClarifications)}\nDo NOT call request_clarification.` : ''}`.trim();
 
     let history: any[] = [{ role: 'user', parts: [{ text: systemMsg }] }];
