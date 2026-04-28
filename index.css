@@ -9,7 +9,6 @@
   body { -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; }
 }
 
-/* ── Scrollbars — matches orinai.org ──────────────────────────────────────── */
 .custom-scrollbar { scrollbar-width: thin; scrollbar-color: rgb(148 163 184 / 0.25) transparent; }
 .custom-scrollbar::-webkit-scrollbar { width: 4px; height: 4px; }
 .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
@@ -18,7 +17,7 @@
 .no-scrollbar { scrollbar-width: none; -ms-overflow-style: none; }
 .no-scrollbar::-webkit-scrollbar { display: none; }
 
-/* ── Glass — matches orinai.org .glass ───────────────────────────────────── */
+/* Glass — raw CSS to avoid @apply /opacity issues */
 .glass {
   background: rgb(255 255 255 / 0.06);
   backdrop-filter: blur(16px) saturate(160%);
@@ -26,63 +25,67 @@
   border: 1px solid rgb(255 255 255 / 0.08);
 }
 
-/* ── Typography ───────────────────────────────────────────────────────────── */
 pre, code { font-family: 'JetBrains Mono','Fira Code',ui-monospace,monospace; }
 
-/* ── Code block inside panel ─────────────────────────────────────────────── */
+/* Code block — raw CSS, no @apply with opacity modifiers */
 .code-block {
-  @apply bg-slate-950 border border-white/8 rounded-xl p-4 font-mono text-xs text-green-300/80 leading-relaxed overflow-auto custom-scrollbar;
-  white-space: pre-wrap; word-break: break-all;
+  background: rgb(2 6 23);
+  border: 1px solid rgb(255 255 255 / 0.08);
+  border-radius: 0.75rem;
+  padding: 1rem;
+  font-family: 'JetBrains Mono','Fira Code',ui-monospace,monospace;
+  font-size: 0.75rem;
+  color: rgb(134 239 172 / 0.8);
+  line-height: 1.625;
+  overflow: auto;
+  white-space: pre-wrap;
+  word-break: break-all;
 }
 
-/* ── View transitions ─────────────────────────────────────────────────────── */
 .view-enter { animation: reveal 0.25s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
 @keyframes reveal { from { opacity:0; transform:translateY(4px); } to { opacity:1; transform:translateY(0); } }
 
-/* ── Reveal on scroll (LandingPage) ──────────────────────────────────────── */
 .reveal-on-scroll { opacity:0; transform:translateY(16px); transition: opacity 0.55s ease, transform 0.55s ease; }
 .reveal-on-scroll.is-visible { opacity:1; transform:translateY(0); }
 
-/* ── Gradient headline (LandingPage) ─────────────────────────────────────── */
 .hero-gradient-title {
   background-image: linear-gradient(120deg, #6366f1, #8b5cf6, #06b6d4, #6366f1);
   background-size: 200% 200%;
-  -webkit-background-clip: text; background-clip: text; color: transparent;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
   animation: gradientMove 8s ease-in-out infinite;
 }
 @keyframes gradientMove {
-  0% { background-position: 0% 50%; } 50% { background-position: 100% 50%; } 100% { background-position: 0% 50%; }
+  0% { background-position: 0% 50%; }
+  50% { background-position: 100% 50%; }
+  100% { background-position: 0% 50%; }
 }
 
-/* ── Ambient orbs (LandingPage) ───────────────────────────────────────────── */
 .landing-orb { position:absolute; border-radius:999px; filter:blur(80px); opacity:0.12; pointer-events:none; }
 .landing-orb-a { width:360px; height:360px; left:-120px; top:80px; background:radial-gradient(circle, #6366f1 0%, transparent 70%); }
 .landing-orb-b { width:440px; height:440px; right:-150px; top:200px; background:radial-gradient(circle, #06b6d4 0%, transparent 72%); }
 
-/* ── Preview shimmer ──────────────────────────────────────────────────────── */
 .preview-shimmer { position:relative; overflow:hidden; }
 .preview-shimmer::after {
   content:''; position:absolute; inset:0;
   background: linear-gradient(120deg, transparent 20%, rgba(255,255,255,0.18) 45%, transparent 75%);
-  transform:translateX(-100%); animation: previewShimmer 3s linear infinite;
+  transform:translateX(-100%);
+  animation: previewShimmer 3s linear infinite;
 }
 @keyframes previewShimmer { 100% { transform:translateX(110%); } }
 
-/* ── Input glow — matches orinai.org .input-glow ─────────────────────────── */
 .input-glow:focus-within {
   box-shadow: 0 0 0 3px rgb(99 102 241 / 0.12), 0 4px 16px rgb(0 0 0 / 0.15);
 }
 
-/* ── Card lift — matches orinai.org ───────────────────────────────────────── */
 .card-lift { transition: transform 0.2s cubic-bezier(0.16,1,0.3,1), box-shadow 0.2s cubic-bezier(0.16,1,0.3,1); }
 .card-lift:hover { transform: translateY(-2px); box-shadow: 0 12px 40px rgb(0 0 0 / 0.3); }
 
-/* ── Touch: strip backdrop-filter ────────────────────────────────────────── */
 @media (hover: none) {
   * { backdrop-filter: none !important; -webkit-backdrop-filter: none !important; }
 }
 
-/* ── Reduced motion ───────────────────────────────────────────────────────── */
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after {
     animation-duration: 0.01ms !important;

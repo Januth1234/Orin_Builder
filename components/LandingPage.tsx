@@ -1,402 +1,301 @@
-﻿import React, { useEffect } from 'react';
+import React, { useEffect, useRef } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { Check, Database, Gauge, LayoutTemplate, Rocket, ShieldCheck, Sparkles } from 'lucide-react';
-import type { LucideIcon } from 'lucide-react';
+import { ArrowRight, Check, Code2, Database, Gauge, LayoutTemplate, Rocket, ShieldCheck, Sparkles, Zap } from 'lucide-react';
 import { APP_CONFIG } from '../config';
 
-type Feature = {
-  title: string;
-  description: string;
-  Icon: LucideIcon;
-};
-
-type Plan = {
-  name: string;
-  price: string;
-  note: string;
-  points: string[];
-  featured?: boolean;
-};
-
-const FEATURES: Feature[] = [
-  {
-    title: 'Prompt to production website',
-    description:
-      'Describe the business in plain language and generate a complete website with structure, copy, and live preview.',
-    Icon: Sparkles,
-  },
-  {
-    title: 'Backend-first planning',
-    description:
-      'Routes, data models, and architecture are planned before UI assembly so the generated output stays aligned to real contracts.',
-    Icon: LayoutTemplate,
-  },
-  {
-    title: 'Schema-aware generation',
-    description:
-      'Database entities and API contracts are generated in the same pipeline and surfaced inside the builder for verification.',
-    Icon: Database,
-  },
-  {
-    title: 'Live build telemetry',
-    description:
-      'Track each generation phase from analysis to validation with progress feedback and event details in real time.',
-    Icon: Gauge,
-  },
-  {
-    title: 'Secure account continuity',
-    description:
-      'Sign in with the same Orin AI account and continue projects with shared identity, plan tiers, and workspace history.',
-    Icon: ShieldCheck,
-  },
-  {
-    title: 'Launch-ready artifacts',
-    description:
-      'Export complete bundles and refine quickly so teams can iterate and ship without rebuilding the project from scratch.',
-    Icon: Rocket,
-  },
+const FEATURES = [
+  { icon: Sparkles,      title: 'Prompt to website',        desc: 'Describe your site in plain English. Get a full HTML/CSS/JS build with live preview in seconds.' },
+  { icon: LayoutTemplate,title: 'Blueprint-first planning', desc: 'Architecture, pages, sections and colour scheme locked in before a line of code is written.' },
+  { icon: Database,      title: 'Schema-aware output',      desc: 'Database schema and API contracts generated in the same pipeline and shown for verification.' },
+  { icon: Gauge,         title: 'Live build telemetry',     desc: 'Watch every pipeline stage from analysis to validation with real-time progress feedback.' },
+  { icon: Code2,         title: 'Full-stack artifacts',     desc: 'Download a complete bundle — HTML, SQL schema, and API contract docs — ready to ship.' },
+  { icon: ShieldCheck,   title: 'Ecosystem SSO',            desc: 'Sign in with the same Orin AI account. Your plan, tier, and history carry over instantly.' },
 ];
 
-const STATS = [
-  { label: 'Pipeline Steps', value: '8' },
-  { label: 'Contract Layers', value: 'Frontend + API + DB' },
-  { label: 'Preview Modes', value: 'Desktop / Tablet / Mobile' },
+const STEPS = [
+  { n: '01', title: 'Describe', desc: 'Type what you want to build in plain language.' },
+  { n: '02', title: 'Generate', desc: 'Watch the 8-stage pipeline build your full stack live.' },
+  { n: '03', title: 'Refine',   desc: 'Tweak copy, layout or features with a single sentence.' },
+  { n: '04', title: 'Ship',     desc: 'Export the bundle or deploy directly from the workspace.' },
 ];
 
-const TESTIMONIALS = [
-  {
-    quote:
-      'The clarification flow prevented bad assumptions and gave us a reliable first version in one build.',
-    name: 'Kasun Rajapaksha',
-    role: 'Founder, LankaLaunch',
-  },
-  {
-    quote:
-      'We used the preview and schema tabs side by side to align frontend and backend before development started.',
-    name: 'Nethmi Perera',
-    role: 'Product Manager, NorthBay Labs',
-  },
-  {
-    quote:
-      'The generated structure was clean enough for our team to iterate immediately instead of rewriting everything.',
-    name: 'Dilan Fernando',
-    role: 'Engineering Lead, BuildPath',
-  },
-];
-
-const PLANS: Plan[] = [
-  {
-    name: 'Starter',
-    price: 'Free',
-    note: 'For exploring ideas quickly',
-    points: ['Limited daily builds', 'Live preview workspace', 'Export generated HTML'],
-  },
-  {
-    name: 'Growth',
-    price: 'Basic',
-    note: 'For active product teams',
-    featured: true,
-    points: ['Higher build quota', 'Project history & refinements', 'Priority generation throughput'],
-  },
-  {
-    name: 'Pro',
-    price: 'Verified / BYO',
-    note: 'For production workflows',
-    points: ['Expanded model access', 'Advanced generation limits', 'Long-running project continuity'],
-  },
+const PLANS = [
+  { name: 'Starter', price: 'Free',   note: 'For exploring ideas', points: ['3 builds / day', 'Live preview', 'HTML export'], featured: false },
+  { name: 'Growth',  price: 'Basic',  note: 'For product teams',   points: ['20 builds / day', 'Project history & refine', 'Priority throughput'], featured: true },
+  { name: 'Pro',     price: 'Verified / BYO', note: 'For production', points: ['Unlimited builds', 'Advanced model access', 'Long-running continuity'], featured: false },
 ];
 
 const LandingPage: React.FC = () => {
   const navigate = useNavigate();
+  const heroRef  = useRef<HTMLDivElement>(null);
 
+  // Scroll reveal
   useEffect(() => {
-    const nodes = Array.from(document.querySelectorAll<HTMLElement>('[data-reveal="true"]'));
+    const nodes = Array.from(document.querySelectorAll<HTMLElement>('[data-reveal]'));
     if (!nodes.length) return;
-
-    const observer = new IntersectionObserver(
-      (entries) => {
-        for (const entry of entries) {
-          if (!entry.isIntersecting) continue;
-          entry.target.classList.add('is-visible');
-          observer.unobserve(entry.target);
-        }
-      },
-      {
-        threshold: 0.2,
-        rootMargin: '0px 0px -8% 0px',
-      },
-    );
-
-    nodes.forEach((node) => observer.observe(node));
-    return () => observer.disconnect();
+    const io = new IntersectionObserver(entries => {
+      entries.forEach(e => { if (e.isIntersecting) { e.target.classList.add('is-visible'); io.unobserve(e.target); } });
+    }, { threshold: 0.15, rootMargin: '0px 0px -6% 0px' });
+    nodes.forEach(n => io.observe(n));
+    return () => io.disconnect();
   }, []);
 
   return (
-    <div className="min-h-screen bg-b-bg text-white">
-      <div className="pointer-events-none absolute inset-0 overflow-hidden">
-        <div className="landing-orb landing-orb-a" />
-        <div className="landing-orb landing-orb-b" />
+    <div className="min-h-screen bg-slate-950 text-white overflow-x-hidden">
+
+      {/* ── Ambient background ── */}
+      <div className="pointer-events-none fixed inset-0 z-0">
+        <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[900px] h-[600px] rounded-full bg-indigo-600/10 blur-[120px]" />
+        <div className="absolute bottom-0 right-0 w-[500px] h-[500px] rounded-full bg-cyan-500/6 blur-[100px]" />
       </div>
 
-      <header className="sticky top-0 z-40 border-b border-b-border/80 bg-b-bg/85 backdrop-blur">
-        <div className="mx-auto flex h-16 w-full max-w-6xl items-center justify-between px-4 sm:px-6">
-          <Link to="/home" className="flex items-center gap-1.5 text-lg font-bold">
-            <span className="text-b-accent">Orin</span>
-            <span className="text-b-blue">AI</span>
-            <span className="ml-1 text-sm font-medium text-white/80">Builder</span>
+      {/* ── Nav ── */}
+      <header className="sticky top-0 z-40 border-b border-white/6 bg-slate-950/80 backdrop-blur-xl">
+        <div className="mx-auto flex h-14 w-full max-w-6xl items-center justify-between px-4 sm:px-6">
+          <Link to="/home" className="flex items-center gap-0.5 text-base font-black select-none">
+            <span className="text-indigo-400">Orin</span><span className="text-cyan-400">AI</span>
+            <span className="text-slate-600 mx-1.5 font-normal text-sm">/</span>
+            <span className="text-slate-300 text-sm font-semibold">Builder</span>
           </Link>
-
-          <nav className="hidden items-center gap-6 text-sm text-b-muted md:flex">
-            <a href="#features" className="hover:text-white transition-colors">
-              Features
-            </a>
-            <a href="#proof" className="hover:text-white transition-colors">
-              Proof
-            </a>
-            <a href="#pricing" className="hover:text-white transition-colors">
-              Pricing
-            </a>
-            <a href="#faq" className="hover:text-white transition-colors">
-              FAQ
-            </a>
+          <nav className="hidden items-center gap-7 text-sm text-slate-500 md:flex">
+            {['Features','How it works','Pricing'].map(s => (
+              <a key={s} href={`#${s.toLowerCase().replace(/ /g,'-')}`} className="hover:text-white transition-colors">{s}</a>
+            ))}
           </nav>
-
           <div className="flex items-center gap-2">
-            <a
-              href={APP_CONFIG.mainAppUrl}
-              target="_blank"
-              rel="noreferrer"
-              className="hidden rounded-lg border border-b-border px-3 py-1.5 text-xs text-b-muted transition-colors hover:border-b-muted hover:text-white sm:inline-flex"
-            >
-              Main App
+            <a href={APP_CONFIG.mainAppUrl} target="_blank" rel="noreferrer"
+              className="hidden rounded-lg border border-white/8 px-3 py-1.5 text-xs text-slate-500 hover:border-white/15 hover:text-white transition-colors sm:inline-flex">
+              Orin AI
             </a>
-            <button
-              onClick={() => navigate('/')}
-              className="rounded-lg bg-b-accent px-3.5 py-1.5 text-xs font-semibold text-black transition-all hover:bg-green-400 active:scale-[0.98]"
-            >
+            <button onClick={() => navigate('/')}
+              className="rounded-lg bg-indigo-600 px-4 py-1.5 text-xs font-bold text-white hover:bg-indigo-500 active:scale-[0.98] transition-all">
               Open Builder
             </button>
           </div>
         </div>
       </header>
 
-      <main>
-        <section className="relative mx-auto flex w-full max-w-6xl flex-col gap-10 px-4 pb-16 pt-14 sm:px-6 md:pt-20">
-          <div className="grid gap-10 lg:grid-cols-[1.05fr_0.95fr] lg:items-center">
-            <div data-reveal="true" className="reveal-on-scroll space-y-6">
-              <p className="inline-flex items-center rounded-full border border-b-border bg-b-surf/70 px-3 py-1 text-xs text-b-muted">
-                AI website builder for real product workflows
-              </p>
+      <main className="relative z-10">
 
-              <h1 className="text-balance text-4xl font-bold leading-tight sm:text-5xl md:text-6xl">
-                Build polished websites from a single prompt.
-                <span className="hero-gradient-title mt-2 block">Blueprint, schema, API, and preview in one flow.</span>
-              </h1>
+        {/* ── Hero ── */}
+        <section ref={heroRef} className="mx-auto flex w-full max-w-6xl flex-col items-center gap-8 px-4 pb-24 pt-20 text-center sm:px-6 md:pt-28">
 
-              <p className="max-w-xl text-base leading-relaxed text-b-muted sm:text-lg">
-                Orin Builder turns intent into deploy-ready output with live build-state feedback, contract-aware planning,
-                and a responsive preview workspace your team can iterate on immediately.
-              </p>
+          <div className="inline-flex items-center gap-2 rounded-full border border-indigo-500/25 bg-indigo-500/8 px-4 py-1.5 text-xs font-semibold text-indigo-300 opacity-0 animate-reveal" style={{animationFillMode:'forwards',animationDelay:'0ms'}}>
+            <Zap size={11} className="text-indigo-400" />
+            Part of the Orin AI ecosystem
+          </div>
 
-              <div className="flex flex-wrap items-center gap-3">
-                <button
-                  onClick={() => navigate('/')}
-                  className="rounded-xl bg-b-accent px-5 py-3 text-sm font-semibold text-black transition-all hover:bg-green-400 active:scale-[0.98]"
-                >
-                  Start Building
-                </button>
-                <a
-                  href="https://www.orinai.org/pricing"
-                  target="_blank"
-                  rel="noreferrer"
-                  className="rounded-xl border border-b-border px-5 py-3 text-sm font-medium text-b-muted transition-colors hover:border-b-muted hover:text-white"
-                >
-                  View Pricing
-                </a>
-              </div>
+          <h1 className="max-w-4xl text-balance text-5xl font-black leading-[1.05] tracking-tight sm:text-6xl md:text-7xl opacity-0 animate-reveal" style={{animationFillMode:'forwards',animationDelay:'80ms'}}>
+            Build a website<br />
+            <span className="hero-gradient-title">from a single prompt.</span>
+          </h1>
 
-              <div className="flex flex-wrap gap-2 pt-1">
-                {STATS.map((stat) => (
-                  <div key={stat.label} className="rounded-lg border border-b-border bg-b-surf/60 px-3 py-2">
-                    <p className="text-[10px] uppercase tracking-wide text-b-dim">{stat.label}</p>
-                    <p className="text-sm font-medium text-white">{stat.value}</p>
-                  </div>
-                ))}
-              </div>
-            </div>
+          <p className="max-w-xl text-base leading-relaxed text-slate-400 sm:text-lg opacity-0 animate-reveal" style={{animationFillMode:'forwards',animationDelay:'160ms'}}>
+            Orin Builder turns your description into a complete, deploy-ready website — HTML, CSS, JS, database schema, and API contracts in one shot.
+          </p>
 
-            <div data-reveal="true" className="reveal-on-scroll">
-              <div className="rounded-2xl border border-b-border bg-b-surf/80 p-3 shadow-2xl shadow-black/30">
-                <div className="mb-3 flex items-center gap-2 rounded-xl border border-b-border bg-b-bg px-3 py-2">
-                  <span className="h-2 w-2 rounded-full bg-red-500/70" />
-                  <span className="h-2 w-2 rounded-full bg-amber-500/70" />
-                  <span className="h-2 w-2 rounded-full bg-green-500/70" />
-                  <span className="ml-2 text-xs text-b-muted">builder.orinai.org</span>
+          <div className="flex flex-wrap items-center justify-center gap-3 opacity-0 animate-reveal" style={{animationFillMode:'forwards',animationDelay:'220ms'}}>
+            <button onClick={() => navigate('/')}
+              className="flex items-center gap-2 rounded-xl bg-indigo-600 px-6 py-3 text-sm font-bold text-white hover:bg-indigo-500 active:scale-[0.98] transition-all shadow-lg shadow-indigo-500/25">
+              Start Building Free <ArrowRight size={14} />
+            </button>
+            <a href="#how-it-works"
+              className="rounded-xl border border-white/8 px-6 py-3 text-sm font-medium text-slate-400 hover:border-white/15 hover:text-white transition-colors">
+              See how it works
+            </a>
+          </div>
+
+          {/* Browser mockup */}
+          <div className="w-full max-w-4xl opacity-0 animate-reveal" style={{animationFillMode:'forwards',animationDelay:'300ms'}}>
+            <div className="rounded-2xl border border-white/8 bg-slate-900/80 shadow-2xl shadow-black/50 overflow-hidden backdrop-blur">
+              {/* Browser chrome */}
+              <div className="flex items-center gap-2 border-b border-white/6 bg-slate-950/60 px-4 py-3">
+                <div className="flex gap-1.5">
+                  <div className="h-2.5 w-2.5 rounded-full bg-red-500/50" />
+                  <div className="h-2.5 w-2.5 rounded-full bg-amber-500/50" />
+                  <div className="h-2.5 w-2.5 rounded-full bg-green-500/50" />
                 </div>
-
-                <div className="grid gap-3 md:grid-cols-[0.95fr_1.05fr]">
-                  <div className="rounded-xl border border-b-border bg-b-bg p-3">
-                    <p className="text-[10px] uppercase tracking-wide text-b-dim">Build Pipeline</p>
-                    <div className="mt-2 space-y-2">
-                      {['Analyzing prompt', 'Blueprint planning', 'Database schema', 'Frontend assembly', 'Validation'].map((item, idx) => (
-                        <div key={item} className="flex items-center gap-2">
-                          <div className={`h-2 w-2 rounded-full ${idx < 3 ? 'bg-b-accent' : 'bg-b-border'}`} />
-                          <span className="text-xs text-b-muted">{item}</span>
+                <div className="flex-1 mx-3 rounded-md bg-white/4 border border-white/6 px-3 py-1 text-[11px] text-slate-500 font-mono">
+                  builder.orinai.org
+                </div>
+              </div>
+              {/* App UI mockup */}
+              <div className="grid grid-cols-[200px_1fr] min-h-[340px]">
+                {/* Sidebar mock */}
+                <div className="border-r border-white/6 bg-slate-900 p-3 hidden sm:block">
+                  <div className="mb-3 flex items-center justify-between">
+                    <div className="h-2 w-16 rounded bg-white/10" />
+                    <div className="h-4 w-4 rounded bg-indigo-500/20" />
+                  </div>
+                  {['Analyzing','Blueprint','Backend','Database','Frontend','Assembling'].map((s, i) => (
+                    <div key={s} className="flex items-center gap-2 py-1">
+                      <div className={`h-2.5 w-2.5 rounded-full ${i < 4 ? 'bg-indigo-400' : i === 4 ? 'bg-indigo-400 animate-pulse' : 'bg-white/10'}`} />
+                      <div className={`h-1.5 rounded ${i < 4 ? 'bg-indigo-400/40' : 'bg-white/8'}`} style={{width:`${40+i*10}px`}} />
+                    </div>
+                  ))}
+                  <div className="mt-4 h-1 w-full rounded-full bg-white/6 overflow-hidden">
+                    <div className="h-full w-[72%] rounded-full bg-gradient-to-r from-indigo-500 to-cyan-500" />
+                  </div>
+                  <p className="mt-1 text-[9px] text-indigo-400 font-mono">72%</p>
+                </div>
+                {/* Preview mock */}
+                <div className="bg-slate-950/50 p-4 preview-shimmer">
+                  <div className="h-full rounded-xl bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 border border-white/6 p-5">
+                    <div className="h-3 w-24 rounded-md bg-indigo-400/30 mb-2" />
+                    <div className="h-5 w-3/4 rounded-md bg-white/20 mb-2" />
+                    <div className="h-3 w-1/2 rounded-md bg-white/10 mb-4" />
+                    <div className="flex gap-2 mb-5">
+                      <div className="h-7 w-24 rounded-lg bg-indigo-600/70" />
+                      <div className="h-7 w-20 rounded-lg border border-white/15" />
+                    </div>
+                    <div className="grid grid-cols-3 gap-2">
+                      {[...Array(3)].map((_,i) => (
+                        <div key={i} className="rounded-lg bg-white/5 border border-white/6 p-2">
+                          <div className="h-2 w-8 rounded bg-indigo-400/20 mb-1.5" />
+                          <div className="h-1.5 w-full rounded bg-white/8 mb-1" />
+                          <div className="h-1.5 w-2/3 rounded bg-white/6" />
                         </div>
                       ))}
                     </div>
                   </div>
-
-                  <div className="rounded-xl border border-b-border bg-white p-2">
-                    <div className="preview-shimmer h-44 rounded-lg bg-gradient-to-br from-slate-950 via-slate-900 to-slate-800 p-3 sm:h-52">
-                      <div className="h-2.5 w-24 rounded bg-white/30" />
-                      <div className="mt-2 h-1.5 w-36 rounded bg-white/20" />
-                      <div className="mt-5 grid grid-cols-2 gap-2">
-                        <div className="h-14 rounded bg-white/15" />
-                        <div className="h-14 rounded bg-white/10" />
-                        <div className="h-14 rounded bg-white/10" />
-                        <div className="h-14 rounded bg-white/15" />
-                      </div>
-                    </div>
-                  </div>
                 </div>
               </div>
             </div>
           </div>
-        </section>
 
-        <section id="features" className="mx-auto w-full max-w-6xl px-4 py-10 sm:px-6 md:py-16">
-          <div data-reveal="true" className="reveal-on-scroll mb-8 flex items-end justify-between gap-4">
-            <div>
-              <p className="text-xs uppercase tracking-wide text-b-dim">Features</p>
-              <h2 className="mt-2 text-3xl font-bold text-white">Everything needed to ship the first version fast</h2>
-            </div>
-          </div>
-
-          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            {FEATURES.map(({ Icon, title, description }) => (
-              <article
-                key={title}
-                data-reveal="true"
-                className="reveal-on-scroll rounded-2xl border border-b-border bg-b-surf/70 p-5 transition-all duration-200 hover:-translate-y-0.5 hover:border-b-muted"
-              >
-                <div className="mb-3 inline-flex rounded-xl border border-b-border bg-b-bg p-2">
-                  <Icon size={16} className="text-b-accent" />
-                </div>
-                <h3 className="text-base font-semibold text-white">{title}</h3>
-                <p className="mt-2 text-sm leading-relaxed text-b-muted">{description}</p>
-              </article>
+          {/* Stats */}
+          <div className="flex flex-wrap justify-center gap-4 pt-2 opacity-0 animate-reveal" style={{animationFillMode:'forwards',animationDelay:'380ms'}}>
+            {[['8','Pipeline stages'],['3','Output artifacts'],['<60s','Average build time']].map(([v,l]) => (
+              <div key={l} className="rounded-xl border border-white/6 bg-white/3 px-5 py-3 text-center">
+                <p className="text-xl font-black text-white">{v}</p>
+                <p className="text-[10px] text-slate-500 uppercase tracking-wide mt-0.5">{l}</p>
+              </div>
             ))}
           </div>
         </section>
 
-        <section id="proof" className="mx-auto w-full max-w-6xl px-4 py-10 sm:px-6 md:py-16">
-          <div data-reveal="true" className="reveal-on-scroll rounded-3xl border border-b-border bg-b-surf/60 p-6 md:p-8">
-            <div className="mb-6 flex items-center justify-between gap-4">
-              <div>
-                <p className="text-xs uppercase tracking-wide text-b-dim">Social proof</p>
-                <h2 className="mt-2 text-2xl font-bold text-white sm:text-3xl">Teams using Orin Builder for launch workflows</h2>
+        {/* ── Features ── */}
+        <section id="features" className="mx-auto w-full max-w-6xl px-4 py-16 sm:px-6">
+          <div data-reveal className="reveal-on-scroll mb-10 text-center">
+            <p className="text-xs uppercase tracking-widest text-indigo-400 font-black mb-2">Features</p>
+            <h2 className="text-3xl font-black text-white sm:text-4xl">Everything in one pipeline</h2>
+          </div>
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            {FEATURES.map(({ icon: Icon, title, desc }) => (
+              <div key={title} data-reveal className="reveal-on-scroll group rounded-2xl border border-white/6 bg-slate-900/60 p-5 hover:border-indigo-500/30 hover:bg-slate-900 card-lift transition-all">
+                <div className="mb-3 inline-flex rounded-xl border border-indigo-500/20 bg-indigo-500/10 p-2.5">
+                  <Icon size={16} className="text-indigo-400" />
+                </div>
+                <h3 className="text-sm font-bold text-white mb-1.5">{title}</h3>
+                <p className="text-sm leading-relaxed text-slate-500">{desc}</p>
               </div>
-            </div>
-
-            <div className="grid gap-4 md:grid-cols-3">
-              {TESTIMONIALS.map((item) => (
-                <figure key={item.name} className="rounded-xl border border-b-border bg-b-bg/60 p-4">
-                  <blockquote className="text-sm leading-relaxed text-b-muted">"{item.quote}"</blockquote>
-                  <figcaption className="mt-4">
-                    <p className="text-sm font-semibold text-white">{item.name}</p>
-                    <p className="text-xs text-b-dim">{item.role}</p>
-                  </figcaption>
-                </figure>
-              ))}
-            </div>
+            ))}
           </div>
         </section>
 
-        <section id="pricing" className="mx-auto w-full max-w-6xl px-4 py-10 sm:px-6 md:py-16">
-          <div data-reveal="true" className="reveal-on-scroll mb-7 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+        {/* ── How it works ── */}
+        <section id="how-it-works" className="mx-auto w-full max-w-6xl px-4 py-16 sm:px-6">
+          <div data-reveal className="reveal-on-scroll mb-10 text-center">
+            <p className="text-xs uppercase tracking-widest text-indigo-400 font-black mb-2">How it works</p>
+            <h2 className="text-3xl font-black text-white sm:text-4xl">From idea to website in 4 steps</h2>
+          </div>
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+            {STEPS.map((s, i) => (
+              <div key={s.n} data-reveal className="reveal-on-scroll relative rounded-2xl border border-white/6 bg-slate-900/60 p-5">
+                {i < STEPS.length - 1 && (
+                  <div className="hidden lg:block absolute top-8 right-0 translate-x-1/2 w-4 h-px bg-indigo-500/30 z-10" />
+                )}
+                <span className="text-3xl font-black text-indigo-500/20 mb-3 block">{s.n}</span>
+                <h3 className="text-sm font-bold text-white mb-1">{s.title}</h3>
+                <p className="text-xs leading-relaxed text-slate-500">{s.desc}</p>
+              </div>
+            ))}
+          </div>
+        </section>
+
+        {/* ── Pricing ── */}
+        <section id="pricing" className="mx-auto w-full max-w-6xl px-4 py-16 sm:px-6">
+          <div data-reveal className="reveal-on-scroll mb-10 flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
             <div>
-              <p className="text-xs uppercase tracking-wide text-b-dim">Pricing</p>
-              <h2 className="mt-2 text-3xl font-bold text-white">Plans that scale from idea to production</h2>
+              <p className="text-xs uppercase tracking-widest text-indigo-400 font-black mb-2">Pricing</p>
+              <h2 className="text-3xl font-black text-white sm:text-4xl">Start free, scale when ready</h2>
             </div>
-            <a
-              href="https://www.orinai.org/pricing"
-              target="_blank"
-              rel="noreferrer"
-              className="text-sm text-b-blue transition-colors hover:text-blue-300"
-            >
-              Full pricing details on Orin AI
+            <a href="https://www.orinai.org/pricing" target="_blank" rel="noreferrer" className="text-sm text-indigo-400 hover:text-indigo-300 transition-colors flex items-center gap-1">
+              Full pricing on Orin AI <ArrowRight size={12} />
             </a>
           </div>
-
           <div className="grid gap-4 md:grid-cols-3">
             {PLANS.map((plan) => (
-              <article
-                key={plan.name}
-                data-reveal="true"
-                className={`reveal-on-scroll rounded-2xl border p-5 ${
-                  plan.featured
-                    ? 'border-b-accent/60 bg-b-accent/10 shadow-lg shadow-b-accent/10'
-                    : 'border-b-border bg-b-surf/70'
-                }`}
-              >
-                <p className="text-xs uppercase tracking-wide text-b-dim">{plan.name}</p>
-                <h3 className="mt-2 text-2xl font-bold text-white">{plan.price}</h3>
-                <p className="mt-2 text-sm text-b-muted">{plan.note}</p>
-
-                <ul className="mt-4 space-y-2">
-                  {plan.points.map((point) => (
-                    <li key={point} className="flex items-start gap-2 text-sm text-b-muted">
-                      <Check size={14} className="mt-0.5 flex-shrink-0 text-b-accent" />
-                      <span>{point}</span>
+              <div key={plan.name} data-reveal className={`reveal-on-scroll rounded-2xl border p-6 flex flex-col gap-4 ${
+                plan.featured
+                  ? 'border-indigo-500/50 bg-indigo-500/8 shadow-xl shadow-indigo-500/10'
+                  : 'border-white/6 bg-slate-900/60'
+              }`}>
+                {plan.featured && (
+                  <span className="self-start rounded-full border border-indigo-500/30 bg-indigo-500/15 px-2.5 py-0.5 text-[10px] font-black uppercase tracking-widest text-indigo-300">Popular</span>
+                )}
+                <div>
+                  <p className="text-[10px] uppercase tracking-widest text-slate-500 font-black">{plan.name}</p>
+                  <p className="text-2xl font-black text-white mt-1">{plan.price}</p>
+                  <p className="text-xs text-slate-500 mt-1">{plan.note}</p>
+                </div>
+                <ul className="flex flex-col gap-2 flex-1">
+                  {plan.points.map((pt) => (
+                    <li key={pt} className="flex items-start gap-2 text-sm text-slate-400">
+                      <Check size={13} className="mt-0.5 shrink-0 text-indigo-400" />{pt}
                     </li>
                   ))}
                 </ul>
-              </article>
+                <button onClick={() => navigate('/')}
+                  className={`w-full rounded-xl py-2.5 text-xs font-bold transition-all active:scale-[0.98] ${
+                    plan.featured
+                      ? 'bg-indigo-600 text-white hover:bg-indigo-500'
+                      : 'border border-white/8 text-slate-400 hover:border-white/15 hover:text-white'
+                  }`}>
+                  Get started
+                </button>
+              </div>
             ))}
           </div>
         </section>
 
-        <section id="faq" className="mx-auto w-full max-w-6xl px-4 pb-16 pt-8 sm:px-6 md:pb-20">
-          <div data-reveal="true" className="reveal-on-scroll rounded-2xl border border-b-border bg-b-surf/70 p-6 md:p-8">
-            <h2 className="text-2xl font-bold text-white">Ready to build your next launch site?</h2>
-            <p className="mt-3 max-w-2xl text-sm leading-relaxed text-b-muted sm:text-base">
-              Start in the builder workspace, generate your first version, and refine in minutes with the same account you
-              use on Orin AI.
-            </p>
-            <div className="mt-5 flex flex-wrap gap-3">
-              <button
-                onClick={() => navigate('/')}
-                className="rounded-xl bg-b-accent px-5 py-2.5 text-sm font-semibold text-black transition-all hover:bg-green-400 active:scale-[0.98]"
-              >
-                Open Builder Workspace
-              </button>
-              <a
-                href={APP_CONFIG.mainAppUrl}
-                target="_blank"
-                rel="noreferrer"
-                className="rounded-xl border border-b-border px-5 py-2.5 text-sm text-b-muted transition-colors hover:border-b-muted hover:text-white"
-              >
-                Visit Orin AI
-              </a>
+        {/* ── CTA ── */}
+        <section className="mx-auto w-full max-w-6xl px-4 pb-20 sm:px-6">
+          <div data-reveal className="reveal-on-scroll rounded-3xl border border-indigo-500/20 bg-gradient-to-br from-indigo-500/10 via-slate-900/80 to-cyan-500/5 p-10 text-center relative overflow-hidden">
+            <div className="absolute inset-0 pointer-events-none">
+              <div className="absolute -top-20 left-1/2 -translate-x-1/2 w-96 h-96 rounded-full bg-indigo-600/12 blur-[80px]" />
+            </div>
+            <div className="relative">
+              <Rocket size={32} className="text-indigo-400 mx-auto mb-4" />
+              <h2 className="text-3xl font-black text-white mb-3">Ready to build your next site?</h2>
+              <p className="text-slate-400 mb-6 max-w-md mx-auto">Jump into the workspace, generate your first version, and refine in minutes.</p>
+              <div className="flex flex-wrap gap-3 justify-center">
+                <button onClick={() => navigate('/')}
+                  className="flex items-center gap-2 rounded-xl bg-indigo-600 px-6 py-3 text-sm font-bold text-white hover:bg-indigo-500 active:scale-[0.98] transition-all shadow-lg shadow-indigo-500/25">
+                  Open Builder <ArrowRight size={14} />
+                </button>
+                <a href={APP_CONFIG.mainAppUrl} target="_blank" rel="noreferrer"
+                  className="rounded-xl border border-white/8 px-6 py-3 text-sm text-slate-400 hover:border-white/15 hover:text-white transition-colors">
+                  Visit Orin AI
+                </a>
+              </div>
             </div>
           </div>
         </section>
       </main>
 
-      <footer className="border-t border-b-border bg-b-surf/60">
-        <div className="mx-auto flex w-full max-w-6xl flex-col gap-3 px-4 py-5 text-xs text-b-dim sm:flex-row sm:items-center sm:justify-between sm:px-6">
-          <span>{APP_CONFIG.branding}</span>
+      {/* ── Footer ── */}
+      <footer className="border-t border-white/6 bg-slate-900/40">
+        <div className="mx-auto flex w-full max-w-6xl flex-col gap-3 px-4 py-5 text-xs text-slate-600 sm:flex-row sm:items-center sm:justify-between sm:px-6">
+          <div className="flex items-center gap-1.5">
+            <span className="text-indigo-400 font-black">Orin</span><span className="text-cyan-400 font-black">AI</span>
+            <span className="mx-1 opacity-30">·</span>
+            <span>{APP_CONFIG.branding}</span>
+          </div>
           <div className="flex flex-wrap items-center gap-4">
-            <a href={`${APP_CONFIG.mainAppUrl}/#terms`} target="_blank" rel="noreferrer" className="hover:text-b-muted">
-              Terms
-            </a>
-            <a href={`${APP_CONFIG.mainAppUrl}/#privacy`} target="_blank" rel="noreferrer" className="hover:text-b-muted">
-              Privacy
-            </a>
-            <a href={`https://github.com/${APP_CONFIG.githubRepo}`} target="_blank" rel="noreferrer" className="hover:text-b-muted">
-              GitHub
-            </a>
+            <a href={`${APP_CONFIG.mainAppUrl}/#terms`} target="_blank" rel="noreferrer" className="hover:text-slate-400 transition-colors">Terms</a>
+            <a href={`${APP_CONFIG.mainAppUrl}/#privacy`} target="_blank" rel="noreferrer" className="hover:text-slate-400 transition-colors">Privacy</a>
+            <a href={`https://github.com/${APP_CONFIG.githubRepo}`} target="_blank" rel="noreferrer" className="hover:text-slate-400 transition-colors">GitHub</a>
           </div>
         </div>
       </footer>
