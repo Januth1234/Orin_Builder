@@ -1,5 +1,6 @@
 import React, { useEffect } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { Analytics } from '@vercel/analytics/react';
 import AuthGate from './components/AuthGate';
 import BuilderApp from './components/BuilderApp';
 import LandingPage from './components/LandingPage';
@@ -22,6 +23,7 @@ const App: React.FC = () => (
       <Route path="/home" element={<LandingPage />} />
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
+    <Analytics />
   </BrowserRouter>
 );
 
